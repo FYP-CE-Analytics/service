@@ -1,0 +1,20 @@
+[project]
+name = "ed-summariser-server"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.12"
+dependencies = [
+    "edapi-fork>=0.1.4",
+    "fastapi[standard]>=0.115.11",
+    "openai>=1.68.2",
+    "pandas>=2.2.3",
+    "pinecone>=6.0.2",
+    "python-dotenv>=1.0.1",
+    "scikit-learn>=1.6.1",
+    "uvicorn>=0.34.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "notebook>=7.3.3",
+]
