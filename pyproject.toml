@@ -4,8 +4,10 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.12"
 dependencies = [
-    "edapi-fork>=0.1.4",
+    "edapi-fork>=0.1.5",
     "fastapi[standard]>=0.115.11",
+    "motor>=3.7.0",
+    "odmantic>=1.0.2",
     "openai>=1.68.2",
     "pandas>=2.2.3",
     "pinecone>=6.0.2",
@@ -16,5 +18,4 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "notebook>=7.3.3",
-]
+    "notebook>=7.3.3"]
