@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.12"
 dependencies = [
+    "celery>=5.5.0",
     "edapi-fork>=0.1.5",
     "fastapi[standard]>=0.115.11",
     "motor>=3.7.0",
