@@ -1,18 +1,18 @@
-from odmantic import Field, Index
+from odmantic import Field, Index, EmbeddedModel, Model
 from pydantic.networks import EmailStr
-from app.models.base import BaseModel
+from datetime import datetime
+from typing import Optional
 
 
-class User(BaseModel):
+class UnitSyncInfoModel(EmbeddedModel):
+    unit_id: int
+    last_synced: Optional[datetime] = Field(default=None)
+
+
+class UserModel(Model):
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
     name: str = Field(default="")
-    email: EmailStr
+    email: EmailStr = Field(unique=True)
     api_key: str = Field(default=None)
-    selected_unit_ids: list[int] = Field(default_factory=list)
-
-    model_config = {
-        "collection": "users",
-        "indexes": lambda: [
-            Index(User.email, unique=True),
-
-        ]
-    }
+    selected_units: list[UnitSyncInfoModel] = Field(default_factory=list)

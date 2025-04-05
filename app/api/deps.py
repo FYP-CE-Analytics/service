@@ -17,8 +17,7 @@ async def get_user_ed_service(email: str, db: AgnosticDatabase = Depends(get_db)
     """
     Get user ed service
     """
-    user = await db.users.find_one({"email": email})
-    print(user["api_key"])
+    user = await db.user.find_one({"email": email})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     # Assuming user object has api_key attribute

@@ -1,19 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException
 from app.api import deps
 from app.core.auth import JWTBearer
-from app.schemas.user import UserResponse, UserCreate, UserEdCoursesResponse, UnitIdsUpdate
+from app.schemas.user import UserResponse, UserCreate, UserEdCoursesResponse, UnitIdsUpdate, UserUpdate, UnitSyncInfo
 from app import crud
 from odmantic.exceptions import DuplicateKeyError
 from app.services.ed_forum_service import EdService
-
+from odmantic import ObjectId
 router = APIRouter()
 
 
 @router.get("/", response_model=UserResponse)
 async def get_user(db=Depends(deps.get_db), email: str = None):
     # Simulate a user retrieval
-    user = await crud.user.get_user_by_email(db=db, email=email)
-    print(user)
+    user = await crud.user.get(db, {"email": email})
     return user
 
 
@@ -44,7 +43,7 @@ async def get_users_units(email: str, ed_service: EdService = Depends(deps.get_u
 
 @router.put("/units", response_model=UserResponse)
 async def set_user_units(
-    email: str,
+    id: ObjectId,
     unit_ids: UnitIdsUpdate,
     db=Depends(deps.get_db),
 
@@ -55,10 +54,23 @@ async def set_user_units(
     # check if ids are from users
 
     try:
-        user = await crud.user.get_user_by_email(db, email=email)
+        user = await crud.user.get(db, {"id": id})
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        user.selected_unit_ids = unit_ids
-        await crud.user.update(db, db_obj=user)
+
+        updated_units = []
+        for unit_id in unit_ids.selectedId:
+            if unit_id in user.selected_units:
+                updated_units.append(user.selected_units[unit_id])
+            else:
+                updated_units.append(UnitSyncInfo(unit_id=unit_id))
+
+        update_data = UserUpdate(
+            selected_units=updated_units,
+        )
+
+        updated_user = await crud.user.update(db, db_obj=user, obj_in=update_data)
+        print(updated_user)
+        return UserResponse.from_model(updated_user)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
