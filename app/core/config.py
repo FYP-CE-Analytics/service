@@ -8,7 +8,7 @@ class Settings():
     # MongoDB settings
     MONGO_DATABASE_URI: str = os.getenv(
         "MONGO_DATABASE_URI", "mongodb://admin:secret@localhost:27017")
-    MONGO_DATABASE: str = "mydatabase"
+    MONGO_DATABASE: str = os.getenv("DB_NAME", "ed_summarizer")
 
 
 settings = Settings()
