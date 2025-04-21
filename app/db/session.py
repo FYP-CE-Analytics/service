@@ -20,12 +20,12 @@ class _MongoClientSingleton:
                 settings.MONGO_DATABASE_URI, driver=DRIVER_INFO
             )
             cls.instance.engine = AIOEngine(
-                client=cls.instance.mongo_client, database=settings.MONGO_DATABASE)
+                client=cls.instance.mongo_client, database=settings.MONGO_DATABASE_NAME)
         return cls.instance
 
 
 def MongoDatabase() -> core.AgnosticDatabase:
-    return _MongoClientSingleton().mongo_client[settings.MONGO_DATABASE]
+    return _MongoClientSingleton().mongo_client[settings.MONGO_DATABASE_NAME]
 
 
 def get_engine() -> AIOEngine:
