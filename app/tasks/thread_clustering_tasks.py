@@ -7,6 +7,7 @@ from typing import Dict, List, Any, Optional
 from pymongo import MongoClient
 from datetime import datetime
 from app.core import config
+from app.models.clusters_result import ClusterResultModel, DocumentClusterModel
 
 
 client = MongoClient(config.settings.MONGO_DATABASE_URI)
@@ -37,6 +38,8 @@ def cluster_unit_documents(self, unit_id: str, auto_optimize: bool = True,
                            min_cluster_size: int = 5, min_samples: int = 5) -> Dict[str, Any]:
     """
     Celery task to perform HDBSCAN clustering on documents for a specific unit.
+    Gets the embeddings from vector database - from prvious task 
+    Performs clustering and stores the results in MongoDB.
 
     Args:
         unit_id: The ID of the unit (used as namespace)
@@ -84,23 +87,14 @@ def cluster_unit_documents(self, unit_id: str, auto_optimize: bool = True,
                             "unit_id": unit_id})
 
     # Perform HDBSCAN clustering with the determined parameters
-    labels, cluster_stats = perform_hdbscan_clustering(
+    core_docs, cluster_stats = perform_hdbscan_clustering(
         embeddings_df,
         min_cluster_size=min_cluster_size,
         min_samples=min_samples,
         metric=metric
     )
 
-    # Map document IDs to cluster labels (rest of the function remains the same)
-    document_clusters = []
-    for i, row in embeddings_df.iterrows():
-        cluster_label = int(labels[i])
-        document_clusters.append({
-            "id": row['id'],
-            "cluster": cluster_label,
-            "title": row.get('metadata', {}).get('content', ''),
-            "category": row.get('metadata', {}).get('category', '')
-        })
+    print(f"Core documents: {core_docs}")
 
     cluster_record = {
         "unit_id": unit_id,
@@ -108,12 +102,11 @@ def cluster_unit_documents(self, unit_id: str, auto_optimize: bool = True,
         "num_documents": len(embeddings_df),
         "num_clusters": cluster_stats["num_clusters"],
         "parameters": {
-            "auto_optimized": auto_optimize,
             "min_cluster_size": min_cluster_size,
             "min_samples": min_samples,
             "metric": metric
         },
-        "document_clusters": document_clusters
+        "core_docs": core_docs,
     }
 
     cluster_id = db.clusters.insert_one(cluster_record).inserted_id
@@ -247,6 +240,7 @@ def perform_hdbscan_clustering(df: pd.DataFrame, min_cluster_size: int = 5, min_
 
     clusterer.fit(embeddings_array)
     labels = clusterer.labels_
+    probabilities = clusterer.probabilities_
 
     # Calculate cluster statistics
     unique_labels, counts = np.unique(labels, return_counts=True)
@@ -268,7 +262,33 @@ def perform_hdbscan_clustering(df: pd.DataFrame, min_cluster_size: int = 5, min_
     print(
         f"Number of noise points: {int(noise_percentage * len(labels))} ({noise_percentage:.2%})")
 
-    return labels, stats
+    # Add cluster labels and probabilities to the DataFrame
+    df = df.copy()  # Create a copy to avoid modifying original
+    df['cluster'] = labels
+    df['probability'] = probabilities
+
+    # Only keep relevant columns for the result
+    core_docs = {}
+
+    # Find documents with maximum probability for each cluster
+    for cluster_label in set(labels):
+        if cluster_label == -1:  # Skip noise
+            continue
+
+        # Get documents in this cluster
+        cluster_docs = df[df['cluster'] == cluster_label]
+
+        # Get the document with highest probability
+        top_doc = cluster_docs.loc[cluster_docs['probability'].idxmax()]
+
+        # Add to core docs with only relevant fields
+        core_docs[str(cluster_label)] = {
+            'id': top_doc['id'],
+            'probability': float(top_doc['probability']),
+            'metadata': top_doc['metadata'],
+        }
+
+    return core_docs, stats
 
 
 if __name__ == "__main__":

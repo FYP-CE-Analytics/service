@@ -3,7 +3,7 @@ from app.core.config import settings
 from motor import motor_asyncio, core
 from odmantic import AIOEngine
 from pymongo.driver_info import DriverInfo
-from app.models import UserModel, StoringRunRecordModel
+from app.models import UserModel, StoringRunRecordModel, ClusterResultModel
 
 DRIVER_INFO = DriverInfo(
     name="full-stack-fastapi-mongodb", version=__version__)
@@ -38,7 +38,7 @@ async def ping():
 
 async def init_indexes():
     engine = get_engine()
-    await engine.configure_database([UserModel, StoringRunRecordModel])
+    await engine.configure_database([UserModel, StoringRunRecordModel, ClusterResultModel])
     print("Indexes created successfully.")
 
 
