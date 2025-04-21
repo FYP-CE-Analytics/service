@@ -5,14 +5,13 @@ from typing import List, Dict, Any
 import os
 from dotenv import load_dotenv
 from pymongo import MongoClient
-from pinecone import Pinecone, Index
+from app.services.pinecone_service import pc_service, INDEX_NAME
 import itertools
 from celery_worker import app
 
 # Load environment variables
 load_dotenv()
 
-PINE_CONE_API_KEY = os.getenv("PINECONE_API_KEY")
 DB_URI = os.getenv("MONGO_DB_URI")
 # Initialize Celery
 
@@ -20,29 +19,24 @@ DB_URI = os.getenv("MONGO_DB_URI")
 client = MongoClient(DB_URI)
 db = client[os.getenv('DB_NAME', 'ed_summarizer')]
 
-pc = Pinecone(api_key=PINE_CONE_API_KEY)
-INDEX_NAME = "ed-summarizer-index"
-if not pc.has_index(INDEX_NAME):
-    pc.create_index_for_model(
-        name=INDEX_NAME,
-        cloud="aws",
-        region="us-east-1",
-        embed={
-            "model": "llama-text-embed-v2",
-            "field_map": {"text": "content"}
-        }
-    )
+# to do allow for unit ids to be passed
 
 
 @app.task
-def fetch_and_store_threads():
+def fetch_and_store_threads(user_id: str = None):
     """
     Get all users, fetch their threads from selected units and store in vector DB
     Keep track of the unit_id used as there can be duplicate amongs users
     """
-
-    # Get all users
-    users = list(db.user.find({}))
+    users = []
+    # if user_id is provided, fetch only that user
+    if user_id:
+        user = db.user.find_one({"_id": user_id})
+        if not user:
+            raise ValueError(f"User with id {user_id} not found")
+        users = [user]
+    else:
+        users = list(db.user.find({}))
     processed_units = set()
     for user in users:
         # Get user's selected units
@@ -77,7 +71,7 @@ def fetch_and_store_threads():
         "unit_ids": list(processed_units),
 
     })
-    return "All threads fetched and stored successfully"
+    return f"Inserted {len(processed_units)} units into vector DB for {len(users)} users"
 
 
 def chunks(iterable, batch_size=200):
@@ -94,7 +88,7 @@ def insert_to_vector_db(documents: List[str], namespace: str, index_name: str = 
     Insert documents into the vector database
     [{id:str, category:str, content: str }]
     """
-    index = pc.Index(index_name)
+    index = pc_service.Index(index_name)
     print(f"Inserting {len(documents)} documents into vector DB...")
     print(f"Namespace: {namespace}")
     print(f"Index Name: {index_name}")
