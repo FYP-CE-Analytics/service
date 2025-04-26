@@ -62,7 +62,8 @@ def fetch_and_store_threads(user_id: str = None):
                 documents.append({
                     "id": str(thread.id),
                     "category": thread.category,
-                    "content": thread_content
+                    "content": thread_content,
+                    "updated_at": thread.updated_at,
                 })
         insert_to_vector_db(documents, namespace=str(unit_info["unit_id"]))
         processed_units.add(unit_id)
@@ -83,7 +84,7 @@ def chunks(iterable, batch_size=200):
         chunk = list(itertools.islice(it, batch_size))
 
 
-def insert_to_vector_db(documents: List[str], namespace: str, index_name: str = INDEX_NAME):
+def insert_to_vector_db(documents: List[dict], namespace: str, index_name: str = INDEX_NAME):
     """
     Insert documents into the vector database
     [{id:str, category:str, content: str }]

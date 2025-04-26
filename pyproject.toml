@@ -5,6 +5,7 @@ description = "Add your description here"
 requires-python = ">=3.12"
 dependencies = [
     "celery>=5.5.0",
+    "crewai[tool,tools]>=0.114.0",
     "edapi-fork>=0.1.5",
     "fastapi[standard]>=0.115.11",
     "flower>=2.0.1",
