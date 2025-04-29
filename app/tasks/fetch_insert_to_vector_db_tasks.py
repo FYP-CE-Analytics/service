@@ -8,6 +8,7 @@ from pymongo import MongoClient
 from app.services.pinecone_service import pc_service, INDEX_NAME
 import itertools
 from celery_worker import app
+from app.schemas.tasks.storing_task_schema import StoringTaskResult
 
 # Load environment variables
 load_dotenv()
@@ -23,10 +24,11 @@ db = client[os.getenv('DB_NAME', 'ed_summarizer')]
 
 
 @app.task
-def fetch_and_store_threads(user_id: str = None):
+def fetch_and_store_threads(user_id: str = None) -> StoringTaskResult:
     """
     Get all users, fetch their threads from selected units and store in vector DB
     Keep track of the unit_id used as there can be duplicate amongs users
+    filter out categories
     """
     users = []
     # if user_id is provided, fetch only that user
@@ -72,7 +74,11 @@ def fetch_and_store_threads(user_id: str = None):
         "unit_ids": list(processed_units),
 
     })
-    return f"Inserted {len(processed_units)} units into vector DB for {len(users)} users"
+    return StoringTaskResult(
+        status="success",
+        message="Threads fetched and stored successfully",
+        unit_ids=list(processed_units),
+    )
 
 
 def chunks(iterable, batch_size=200):

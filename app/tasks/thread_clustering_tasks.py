@@ -8,7 +8,9 @@ from pymongo import MongoClient
 from datetime import datetime
 from app.core import config
 from app.models.clusters_result import ClusterResultModel, DocumentClusterModel
-
+from app.schemas.tasks.cluster_schema import ClusterRecord, ClusterTaskResult
+from app.db.session import MongoDatabase
+from app.repositories.task_transaction_repository import TaskTransactionRepository
 
 client = MongoClient(config.settings.MONGO_DATABASE_URI)
 db = client.get_database(config.settings.MONGO_DATABASE_NAME)
@@ -50,6 +52,18 @@ def cluster_unit_documents(self, unit_id: str, auto_optimize: bool = True,
     Returns:
         Dictionary with clustering results
     """
+    task_transaction_repo = TaskTransactionRepository()
+    task_transaction_repo.create_task_sync(
+        task_id=self.request.id,
+        task_name="cluster_unit_documents",
+        unit_id=unit_id,
+        input={
+            "unit_id": unit_id,
+            "auto_optimize": auto_optimize,
+            "min_cluster_size": min_cluster_size,
+            "min_samples": min_samples
+        },
+    )
     # Update task state to show progress
     self.update_state(state="PROCESSING",
                       meta={"status": "Fetching embeddings", "unit_id": unit_id})
@@ -96,7 +110,7 @@ def cluster_unit_documents(self, unit_id: str, auto_optimize: bool = True,
 
     print(f"Core documents: {core_docs}")
 
-    cluster_record = {
+    cluster_record = ClusterRecord(** {
         "unit_id": unit_id,
         "created_at": datetime.now(),
         "num_documents": len(embeddings_df),
@@ -106,25 +120,41 @@ def cluster_unit_documents(self, unit_id: str, auto_optimize: bool = True,
             "min_samples": min_samples,
             "metric": metric
         },
-        "core_docs": core_docs,
+        "core_docs": list(core_docs.values()),
     }
+    )
 
-    cluster_id = db.clusters.insert_one(cluster_record).inserted_id
-    # Return clustering results with parameter info
-    return {
-        "status": "success",
-        "unit_id": unit_id,
-        "cluster_id": str(cluster_id),
-        "num_documents": len(embeddings_df),
-        "num_clusters": cluster_stats["num_clusters"],
-        "noise_percentage": cluster_stats["noise_percentage"],
-        "parameters": {
-            "auto_optimized": auto_optimize,
-            "min_cluster_size": min_cluster_size,
-            "min_samples": min_samples,
-            "metric": metric
+    # handle if fail
+    cluster_id = db.clusters.insert_one(
+        cluster_record.model_dump()).inserted_id
+    if not cluster_id:
+        return {
+            "status": "error",
+            "message": "Failed to save clustering results to database",
+            "unit_id": unit_id
         }
-    }
+
+    cluster_record.cluster_id = str(cluster_id)
+    task_transaction_repo.update_task_sync(
+        task_id=self.request.id,
+        status="COMPLETED",
+        output={
+            "unit_id": unit_id,
+            "cluster_id": str(cluster_id),
+            "num_documents": len(embeddings_df),
+            "num_clusters": cluster_stats["num_clusters"],
+            "parameters": {
+                "min_cluster_size": min_cluster_size,
+                "min_samples": min_samples,
+                "metric": metric
+            }
+        },
+    )
+    return ClusterTaskResult(**{
+        "status": "success",
+        "message": "Clustering completed successfully",
+        "result": cluster_record
+    }).model_dump()
 
 
 def optimize_hdbscan_parameters(df: pd.DataFrame) -> tuple:

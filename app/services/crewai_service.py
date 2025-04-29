@@ -3,7 +3,6 @@ import os
 from typing import Type, Any, Optional, Dict, List
 from crewai import Agent, Task, Crew, Process, LLM
 from crewai.tools import BaseTool
-from crewai_tools import FileWriterTool
 from pydantic import BaseModel, Field
 from app.schemas.vector_store import VectorSearchResponse
 from app.schemas.crewai_faq_service_schema import CrewAIFAQInputSchema
@@ -51,9 +50,9 @@ class QuestionVectorSearchTool(BaseTool):
         query_string = query.get("description", "")
 
         try:
-            results: VectorSearchResponse = self.vectorstore.search_with_string(
+            results = self.vectorstore.search_with_string(
                 query_string=query_string, collection_name=self.collection_name, top_k=3)
-            return results.hits
+            return results
         except Exception as e:
             print(f"Error during vector search: {e}")
             return [{"error": f"Vector search failed: {e}"}]

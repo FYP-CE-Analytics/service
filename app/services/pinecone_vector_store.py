@@ -28,23 +28,23 @@ class PineconeVectorStore(VectorStoreBase):
             )
         self.index = self.pc_service.Index(self.index_name)
 
-    def search_with_string(self, query_string, collection_name, top_k=3, threshold=None, **kwargs) -> VectorSearchResponse:
+    def search_with_string(self, query_string, collection_name, top_k=3, threshold=None, **kwargs):
 
         response = self.index.search(namespace=collection_name, query={
             "inputs": {"text": query_string},
             "top_k": top_k,
         }, fields=["id", "content", "metadata"], rerank={
-            "model": "cohere-rerank-3.5",
+            "model": "bge-reranker-v2-m3",
             "rank_fields": ["content"]})
         hits = response.get("result", {}).get("hits", [])
         if threshold is not None:
             hits = [hit for hit in hits if hit.get("_score", 0) > threshold]
-        return VectorSearchResponse(hits=hits, total=len(hits))
+        return hits
 
     def search_with_vector(self, vector: List[int], collection_name, top_k=3, threshold=None, **kwargs) -> VectorSearchResponse:
         response = self.index.query(namespace=collection_name,
                                     vector=vector, top_k=top_k, fields=["id", "content", "metadata"], rerank={
-                                        "model": "cohere-rerank-3.5",
+                                        "model": "bge-reranker-v2-m3",
                                         "rank_fields": ["content"]})
         hits = response.get("result", {}).get("hits", [])
         if threshold is not None:
