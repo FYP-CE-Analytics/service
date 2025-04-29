@@ -1,1 +1,1 @@
-INDEX_NAME = "ed-summarizer-index"
+VECTOR_INDEX_NAME = "ed-summarizer-index"
