@@ -9,11 +9,13 @@ from app.services.pinecone_service import pc_service, INDEX_NAME
 import itertools
 from celery_worker import app
 from app.schemas.tasks.storing_task_schema import StoringTaskResult
-
+from datetime import datetime
+from bson import ObjectId
+from app.repositories.task_transaction_repository import TaskTransactionRepository
 # Load environment variables
 load_dotenv()
 
-DB_URI = os.getenv("MONGO_DB_URI")
+DB_URI = os.getenv("MONGO_DATABASE_URI")
 # Initialize Celery
 
 # Initialize connections
@@ -81,6 +83,89 @@ def fetch_and_store_threads(user_id: str = None) -> StoringTaskResult:
     )
 
 
+@app.task
+def fetch_and_store_threads_by_unit(user_id: str, unit_id: str, transaction_id: str) -> StoringTaskResult:
+    """
+    Fetch threads from a specific unit for a specific user and store in vector DB
+
+    Args:
+        user_id: ID of the user
+        unit_id: ID of the unit to fetch threads from
+
+    Returns:
+        StoringTaskResult with status and message
+    """
+
+    print(f"Fetching threads for user {user_id} and unit {unit_id}...")
+    # Find the user
+    user = db.user.find_one({"_id": user_id})
+    task_transaction_repo = TaskTransactionRepository()
+    task_transaction_repo.update_task_status_sync(
+        id=transaction_id,
+        status="running fetch_and_store_threads_by_unit",
+
+    )
+
+    # If not found, try with ObjectId
+    if not user:
+        try:
+            user = db.user.find_one({"_id": ObjectId(user_id)})
+        except Exception as e:
+            print(f"Error converting to ObjectId: {e}")
+    print(f"User: {user}")
+    # Check if the unit is in user's selected units
+    selected_units = user.get('selected_units', [])
+    print(f"Selected units: {selected_units}")
+    unit_info = None
+    for unit in selected_units:
+        if unit["unit_id"] == unit_id:
+            unit_info = unit
+            break
+
+    # if not unit_info:
+    #     raise ValueError(
+    #         f"Unit with id {unit_id} not found in user's selected units")
+
+    # Initialize Ed API client
+    ed_client = EdAPI(user['api_key'])
+
+    # Fetch threads for this unit
+    print(f"Fetching threads for unit {unit_id}...")
+    threads = ed_client.list_all_students_threads(course_id=unit_id)
+    print(f"Fetched {len(threads)} threads")
+
+    # Process and store threads in vector DB
+    documents = []
+    for thread in threads:
+        thread_content = f"Title: {thread.title}\nContent: {thread.document}"
+        documents.append({
+            "id": str(thread.id),
+            "category": thread.category,
+            "content": thread_content,
+            "updated_at": str(thread.updated_at),
+        })
+
+    # Insert into vector DB
+    namespace = str(unit_id)
+    insert_to_vector_db(documents, namespace=namespace)
+
+    # Record the task
+    db.task_records.insert_one({
+        "user_id": user_id,
+        "unit_ids": [unit_id],
+        "timestamp": datetime.now(),
+        "thread_count": len(threads)
+    })
+
+    return StoringTaskResult(
+        status="success",
+        message=f"Fetched and stored {len(threads)} threads for unit {unit_id}",
+        unit_ids=[unit_id],
+        transaction_id=transaction_id
+
+    ).model_dump()
+
+
 def chunks(iterable, batch_size=200):
     """A helper function to break an iterable into chunks of size batch_size."""
     it = iter(iterable)
@@ -96,11 +181,13 @@ def insert_to_vector_db(documents: List[dict], namespace: str, index_name: str =
     [{id:str, category:str, content: str }]
     """
     index = pc_service.Index(index_name)
+    print(index.describe_index_stats())
     print(f"Inserting {len(documents)} documents into vector DB...")
     print(f"Namespace: {namespace}")
     print(f"Index Name: {index_name}")
 
-    for batch in chunks(documents, batch_size=200):
+    for batch in chunks(documents, batch_size=50):
+        print(f"Inserting batch of size {len(batch)}")
         try:
             index.upsert_records(
                 records=batch,
@@ -109,6 +196,7 @@ def insert_to_vector_db(documents: List[dict], namespace: str, index_name: str =
 
         except Exception as e:
             print(f"Error inserting batch into vector DB: {e}")
+
             continue
 
 

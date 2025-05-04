@@ -12,25 +12,26 @@ class TaskTransactionRepository:
         """Initialize using the singleton database connection"""
         self.db = MongoDatabase()
         self.engine = get_engine()
-        self.collection_name = "task_transactions"
+        self.collection_name = "task_transaction"
 
-    async def create_task(self, task_id: str, task_name: str, unit_id: str = "", user_id: str = "") -> TaskTransactionModel:
+    async def create_task(self, task_name: str, unit_id: str, user_id: str, input: dict) -> TaskTransactionModel:
         """Create a new task transaction"""
         task = TaskTransactionModel(
-            task_id=task_id,
-            status="pending",
+            task_id="",
+            status="recieved",
             created_at=datetime.now(),
             unit_id=unit_id,
             user_id=user_id,
-            task_name=task_name
+            task_name=task_name,
+            input=input,
         )
         return await self.engine.save(task)
 
-    async def update_task_status(self, task_id: str, status: str,
+    async def update_task_status(self, id: str, status: str,
                                  error_message: str = "",
                                  result: Dict[str, Any] = None) -> Optional[TaskTransactionModel]:
         """Update task status and optional fields"""
-        task = await self.engine.find_one(TaskTransactionModel, TaskTransactionModel.task_id == task_id)
+        task = await self.engine.find_one(TaskTransactionModel, TaskTransactionModel.id == id)
         if not task:
             return None
 
@@ -74,21 +75,47 @@ class TaskTransactionRepository:
         task["_id"] = result.inserted_id
         return task
 
-    def update_task_status_sync(self, task_id: str, status: str,
+    def update_task_status_sync(self, id: str, status: str,
                                 error_message: str = "",
-                                result: Dict[str, Any] = None) -> Dict:
-        """Update task status synchronously"""
-        update_data = {"status": status}
-        if status in ["completed", "success"]:
-            update_data["completed_at"] = datetime.now()
-        if error_message:
-            update_data["error_message"] = error_message
-        if result:
-            update_data["result"] = result
+                                result: Dict[str, Any] = None) -> Optional[Dict]:
+        """Update task status and optional fields synchronously"""
+        try:
+            # Make sure we're using the right database access method
+            # Direct access to the MongoDB collection
+            from pymongo import MongoClient
+            import os
 
-        self.db[self.collection_name].update_one(
-            {"task_id": task_id},
-            {"$set": update_data}
-        )
+            # Get a direct connection to MongoDB
+            client = MongoClient(os.getenv("MONGO_DATABASE_URI"))
+            db = client[os.getenv('DB_NAME', 'ed_summarizer')]
 
-        return self.db[self.collection_name].find_one({"task_id": task_id})
+            # Find the document
+            transaction = db[self.collection_name].find_one(
+                {"_id": ObjectId(id)})
+            if not transaction:
+                print(f"Transaction with id {id} not found")
+                return None
+
+            # Prepare update data
+            update_data = {"status": status}
+            if status in ["completed", "success"]:
+                update_data["completed_at"] = datetime.now()
+            if error_message:
+                update_data["error_message"] = error_message
+            if result:
+                update_data["result"] = result
+
+            # Use update_one with $set operator instead of replace_one
+            db[self.collection_name].update_one(
+                {"_id": ObjectId(id)},
+                {"$set": update_data}
+            )
+
+            # Return the updated document
+            updated_transaction = db[self.collection_name].find_one(
+                {"_id": ObjectId(id)})
+            return updated_transaction
+
+        except Exception as e:
+            print(f"Error updating task status: {str(e)}")
+            return None

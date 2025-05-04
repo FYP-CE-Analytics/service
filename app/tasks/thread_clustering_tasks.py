@@ -36,34 +36,37 @@ def get_embeddings_from_db(namespace, vector_store):
 
 
 @app.task(bind=True, name="cluster_unit_documents")
-def cluster_unit_documents(self, unit_id: str, auto_optimize: bool = True,
-                           min_cluster_size: int = 5, min_samples: int = 5) -> Dict[str, Any]:
+def cluster_unit_documents(self, prev_result: Dict, unit_id: str, auto_optimize: bool = True,
+                           min_cluster_size: int = 5, min_samples: int = 5) -> Dict:
     """
     Celery task to perform HDBSCAN clustering on documents for a specific unit.
-    Gets the embeddings from vector database - from prvious task 
-    Performs clustering and stores the results in MongoDB.
+    Gets the embeddings from vector database - from previous task
 
     Args:
+        prev_result: Result from the previous task in the chain
         unit_id: The ID of the unit (used as namespace)
         auto_optimize: Whether to automatically optimize clustering parameters
-        min_cluster_size: Minimum size of clusters for HDBSCAN (used if auto_optimize=False)
-        min_samples: Minimum samples parameter for HDBSCAN (used if auto_optimize=False)
-
-    Returns:
-        Dictionary with clustering results
+        min_cluster_size: Minimum size of clusters for HDBSCAN
+        min_samples: Minimum samples parameter for HDBSCAN
     """
+    # Check if previous task was successful
+    if prev_result.get("status") != "success":
+        print(f"Previous task failed: {prev_result.get('message')}")
+        return prev_result  # Forward the error
+
+    print(f"Starting clustering task for unit_id: {unit_id}")
+    print(f"Previous task result: {prev_result}")
+
+    # Extract data from previous task if needed
+    prev_transaction_id = prev_result.get("transaction_id")
+
     task_transaction_repo = TaskTransactionRepository()
-    task_transaction_repo.create_task_sync(
-        task_id=self.request.id,
-        task_name="cluster_unit_documents",
-        unit_id=unit_id,
-        input={
-            "unit_id": unit_id,
-            "auto_optimize": auto_optimize,
-            "min_cluster_size": min_cluster_size,
-            "min_samples": min_samples
-        },
+    # Update the task transaction if needed
+    task_transaction_repo.update_task_status_sync(
+        id=prev_transaction_id,
+        status="finish clustering"
     )
+
     # Update task state to show progress
     self.update_state(state="PROCESSING",
                       meta={"status": "Fetching embeddings", "unit_id": unit_id})
@@ -135,26 +138,13 @@ def cluster_unit_documents(self, unit_id: str, auto_optimize: bool = True,
         }
 
     cluster_record.cluster_id = str(cluster_id)
-    task_transaction_repo.update_task_sync(
-        task_id=self.request.id,
-        status="COMPLETED",
-        output={
-            "unit_id": unit_id,
-            "cluster_id": str(cluster_id),
-            "num_documents": len(embeddings_df),
-            "num_clusters": cluster_stats["num_clusters"],
-            "parameters": {
-                "min_cluster_size": min_cluster_size,
-                "min_samples": min_samples,
-                "metric": metric
-            }
-        },
-    )
-    return ClusterTaskResult(**{
-        "status": "success",
-        "message": "Clustering completed successfully",
-        "result": cluster_record
-    }).model_dump()
+
+    return ClusterTaskResult(
+        status="success",
+        message="Clustering completed successfully",
+        result=cluster_record,
+        transaction_id=prev_transaction_id
+    ).model_dump()
 
 
 def optimize_hdbscan_parameters(df: pd.DataFrame) -> tuple:

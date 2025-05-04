@@ -1,11 +1,12 @@
 from fastapi import APIRouter, HTTPException
-from app.tasks.fetch_insert_to_vector_db_tasks import fetch_and_store_threads
+from app.tasks.fetch_insert_to_vector_db_tasks import fetch_and_store_threads, fetch_and_store_threads_by_unit
 from app.tasks.thread_clustering_tasks import cluster_unit_documents
 from app.tasks.agents_tasks import run_agent_analysis
 from celery import chain
 from celery.result import AsyncResult
 from celery_worker import app as celery_app
 from app.repositories.task_transaction_repository import TaskTransactionRepository
+from app.schemas.tasks.requets import RunTaskRequest
 
 router = APIRouter()
 
@@ -40,24 +41,28 @@ async def trigger_agent_analysis_task(unit_id: str, cluster_id: str):
     res = run_agent_analysis.delay(unit_id, cluster_id)
 
 
-@router.post("/run_chain/{unit_id}")
-def run_chain_task(unit_id: str):
+@router.post("/run_chain/")
+async def run_chain_task(request: RunTaskRequest):
     """
     Run a chain of Celery tasks to fetch, cluster, and analyze threads.
     to do validation and error handling
     """
     repo = TaskTransactionRepository()
-    repo.create_task()
-
+    transcation_record = await repo.create_task(task_name="run_chain_task",
+                                                user_id=request.userId,
+                                                unit_id=request.unitId,
+                                                input=request.model_dump())
+    print("transcation_record" + str(transcation_record))
     task_chain = chain(
-
-        cluster_unit_documents.s(unit_id, auto_optimize=True),
+        fetch_and_store_threads_by_unit.s(
+            request.userId, request.unitId, str(transcation_record.id)),
+        cluster_unit_documents.s(request.unitId),
         run_agent_analysis.s()
     )
-    print(f"Running chain for unit_id: {unit_id}")
     # Execute the chain
     result = task_chain.apply_async()
-    return {"task_id": result.id, "status": result.status}
+
+    return {"transactionId": str(transcation_record.id), "status": result.status}
 
 
 @router.get("/status/{task_id}")
@@ -105,6 +110,30 @@ async def get_task_status(task_id: str):
         raise HTTPException(
             status_code=500,
             detail=f"Error checking task status: {str(e)}"
+        )
+
+
+@router.get("/{unit_id}")
+async def get_unit_tasks(unit_id: str):
+    """
+    Get all tasks related to a specific unit.
+
+    Args:
+        unit_id: ID of the unit to check
+
+    Returns:
+        List of task IDs related to the unit
+    """
+    try:
+        # Fetch tasks from the database
+        repo = TaskTransactionRepository()
+        tasks = await repo.get_tasks_by_unit_id(unit_id)
+        return tasks
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching tasks for unit {unit_id}: {str(e)}"
         )
 
 

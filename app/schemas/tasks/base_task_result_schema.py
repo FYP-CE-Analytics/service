@@ -16,3 +16,5 @@ class TaskResult(BaseModel, Generic[T]):
     message: Optional[str] = Field(
         None, description="Optional message (required if error)")
     result: Optional[T] = Field(None, description="Task-specific result data")
+    transaction_id: Optional[str] = Field(
+        None, description="Transaction ID for tracking the task")

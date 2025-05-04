@@ -28,12 +28,10 @@ def run_agent_analysis(self, clustering_result: dict = None, cluster_id: str = N
     """
     task_repo = TaskTransactionRepository()
 
-    task_repo.create_task_sync(
-        task_id=self.request.id,
-        task_name="run_agent_analysis",
-        unit_id=unit_id(clustering_result.get("result", {}).get(
-            "unit_id") if clustering_result else None),
-        input=clustering_result,
+    transaction_id = clustering_result.get("transaction_id")
+    task_repo.update_task_status_sync(
+        id=transaction_id,
+        status="running agent analysis",
     )
     print(
         f"Running agent analysis with clustering_result: {clustering_result}, cluster_id: {cluster_id}, unit_id: {unit_id}")
@@ -99,9 +97,9 @@ def run_agent_analysis(self, clustering_result: dict = None, cluster_id: str = N
                       meta={"status": "Running agent analysis", "unit_id": unit_id})
 
     result = UnitAnalysisCrewService(
-        index_name=VECTOR_INDEX_NAME).run(CrewAIFAQInputSchema(**input_data))
+        index_name=VECTOR_INDEX_NAME).run(CrewAIFAQInputSchema(**input_data)).model_dump()
     task_repo.update_task_status_sync(
-        task_id=self.request.id,
+        id=transaction_id,
         status="completed",
         result=result
     )
