@@ -156,10 +156,10 @@ class UnitAnalysisCrewService:
                 "3.  **Assessment Links:** Briefly mention if/how the themes relate to specific assessments or unit content (using {assessment} and {content} context).\n"
                 "4.  **Potential Blockers:** Highlight any significant misconceptions or difficulties indicated by the themes.\n"
                 "5.  **Draft FAQ:** Include the generated FAQ questions from the FAQ Writer.\n"
-                "Structure the report for clarity and easy digestion by educators. Use the file writer tool to save the report."
+                "Structure the report for clarity and easy digestion by educators"
             ),
             expected_output=(
-                "A well-structured weekly report document summarizing student question trends, analysis, and the generated FAQ draft, saved to a file."
+                "A well-structured weekly report document summarizing student question trends, analysis, and the generated FAQ draft"
             ),
             agent=reportWriterAgent,
             # Depends on both previous tasks
