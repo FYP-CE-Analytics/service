@@ -13,7 +13,11 @@ router = APIRouter()
 async def get_user(db=Depends(deps.get_db), email: str = None):
     # Simulate a user retrieval
     user = await crud.user.get(db, {"email": email})
-    return user
+    print(user.selected_units)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return UserResponse.from_model(user)
 
 
 @router.post("/", response_model=UserResponse)
@@ -59,7 +63,7 @@ async def set_user_units(
             raise HTTPException(status_code=404, detail="User not found")
 
         updated_units = []
-        for unit_id in unit_ids.selectedId:
+        for unit_id in unit_ids.selectedUnitIds:
             if unit_id in user.selected_units:
                 updated_units.append(user.selected_units[unit_id])
             else:

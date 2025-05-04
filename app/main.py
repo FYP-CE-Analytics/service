@@ -1,10 +1,18 @@
 import uvicorn
 from fastapi import FastAPI
 from app.api.api_v1.api import api_router
+from fastapi.middleware.cors import CORSMiddleware
 from app.db.session import init_indexes
 
 
 app = FastAPI(swagger_ui_parameters={"defaultModelsExpandDepth": -1})
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all methods
+    allow_headers=["*"],  # Allow all headers
+)
 
 
 @app.on_event("startup")
@@ -26,4 +34,4 @@ async def health():
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

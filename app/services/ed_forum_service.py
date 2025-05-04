@@ -15,6 +15,9 @@ class EdService:
             if not self.api_key:
                 raise ValueError("API key is required")
             self._client = EdAPI(self.api_key)
+            print(
+                f"Initializing Ed API client with API key: {self.api_key[:5]}...")
+
         return self._client
 
     async def get_user_info(self) -> EdUser:
@@ -34,6 +37,7 @@ class EdService:
     async def get_user_active_courses(self) -> list:
         """Get user's active courses"""
         user = await self.get_user_info()
+
         return user.get_active_courses()
 
 

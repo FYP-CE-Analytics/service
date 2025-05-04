@@ -5,6 +5,7 @@ from app.tasks.agents_tasks import run_agent_analysis
 from celery import chain
 from celery.result import AsyncResult
 from celery_worker import app as celery_app
+from app.repositories.task_transaction_repository import TaskTransactionRepository
 
 router = APIRouter()
 
@@ -45,8 +46,11 @@ def run_chain_task(unit_id: str):
     Run a chain of Celery tasks to fetch, cluster, and analyze threads.
     to do validation and error handling
     """
+    repo = TaskTransactionRepository()
+    repo.create_task()
 
     task_chain = chain(
+
         cluster_unit_documents.s(unit_id, auto_optimize=True),
         run_agent_analysis.s()
     )

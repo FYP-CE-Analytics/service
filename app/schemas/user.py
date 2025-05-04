@@ -48,7 +48,7 @@ class UserResponse(BaseBSONModel):
     id: ObjectId
     name: str
     email: EmailStr
-    selected_units: List[UnitSyncInfo] = Field(default_factory=list)
+    selectedUnits: List[UnitSyncInfo] = Field(default_factory=list)
 
     @classmethod
     def from_model(cls, user: UserModel):
@@ -57,7 +57,7 @@ class UserResponse(BaseBSONModel):
             id=user.id,
             name=user.name,
             email=user.email,
-            selected_units=[
+            selectedUnits=[
                 UnitSyncInfo.from_model(unit) for unit in user.selected_units
             ]
         )
@@ -69,4 +69,4 @@ class UserEdCoursesResponse(BaseBSONModel):
 
 
 class UnitIdsUpdate(BaseBSONModel):
-    selectedId: List[int]
+    selectedUnitIds: List[int]
