@@ -55,9 +55,10 @@ async def run_chain_task(request: RunTaskRequest):
     print("transcation_record" + str(transcation_record))
     task_chain = chain(
         fetch_and_store_threads_by_unit.s(
-            request.userId, request.unitId, str(transcation_record.id)),
-        cluster_unit_documents.s(request.unitId),
-        run_agent_analysis.s()
+            request.userId, request.unitId, str(transcation_record.id), request.startDate, request.endDate),
+        cluster_unit_documents.s(
+            request.unitId, request.startDate, request.endDate),
+        run_agent_analysis.s(request.startDate, request.endDate)
     )
     # Execute the chain
     result = task_chain.apply_async()

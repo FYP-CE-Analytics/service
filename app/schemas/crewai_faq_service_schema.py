@@ -29,5 +29,23 @@ class CrewAIFAQInputSchema(BaseModel):
         description="The unit contents",
 
     )
+    start_date: str = Field(
+        ...,
+        title="Start Date",
+        description="The start date for the analysis.",
+        example="2023-01-01"
+    )
+    end_date: str = Field(
+        ...,
+        title="End Date",
+        description="The end date for the analysis.",
+        example="2023-12-31"
+    )
 
-    # assessment: Otional = Field(
+    assessment: str = Field(
+        default="",
+        title="Assessment",
+        description="The assessment of the unit.",
+        example="This unit provides a comprehensive overview of CrewAI."
+
+    )

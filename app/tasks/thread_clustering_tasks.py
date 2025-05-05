@@ -16,27 +16,109 @@ client = MongoClient(config.settings.MONGO_DATABASE_URI)
 db = client.get_database(config.settings.MONGO_DATABASE_NAME)
 
 
-def get_embeddings_from_db(namespace, vector_store):
+def get_embeddings_from_db(namespace, vector_store, start_date=None, end_date=None) -> pd.DataFrame:
     """
-    Fetch embeddings from the database for a given namespace.
+    Fetch embeddings from the database for a given namespace with optional date filtering.
+
+    Args:
+        namespace: The namespace (unit_id) to fetch embeddings from
+        vector_store: The vector store client
+        start_date: Filter documents after this date (string in ISO format or datetime)
+        end_date: Filter documents before this date (string in ISO format or datetime)
+
+    Returns:
+        DataFrame with embeddings and metadata
     """
-    ids = list(vector_store.list(namespace=namespace)
-               )  # get all ids in the namespace
+    # Get all ids in the namespace
+    ids = list(vector_store.list(namespace=namespace))
 
     if not ids:
         print(f"No documents found for namespace: {namespace}")
         return pd.DataFrame()
 
+    # Fetch all embeddings from the vector store
     embeddings = vector_store.fetch(ids[0], namespace=namespace)
     embeddings_dict = embeddings.vectors
+
+    # Convert to a list of dictionaries for DataFrame conversion
     embeddings = [{"id": vector.id, "embedding": vector.values,
                   "metadata": vector.metadata} for vector in embeddings_dict.values()]
+
+    # Create DataFrame from all embeddings
     embeddings_df = pd.DataFrame(embeddings)
+
+    if embeddings_df.empty:
+        return embeddings_df
+
+    # Apply date filtering if dates are provided
+    if start_date or end_date:
+        print(f"Filtering documents by date range: {start_date} to {end_date}")
+
+        # Convert string dates to datetime if they're not already
+        from datetime import datetime
+
+        # Function to parse date from metadata
+        def parse_date(date_str):
+            if isinstance(date_str, str):
+                # Handle the format in the metadata: "2024-02-13 18:26:19.711432+11:00"
+                try:
+                    return datetime.fromisoformat(date_str)
+                except ValueError:
+                    try:
+                        # Fallback parsing if the format is different
+                        return datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S.%f%z")
+                    except ValueError:
+                        print(
+                            f"Warning: Could not parse date string: {date_str}")
+                        return None
+            return date_str  # If it's already a datetime object
+
+        # Convert filter dates
+        if start_date and isinstance(start_date, str):
+            start_date = parse_date(start_date)
+        if end_date and isinstance(end_date, str):
+            end_date = parse_date(end_date)
+
+        # Filter the DataFrame based on dates
+        filtered_embeddings = []
+        filtered_count = 0
+        total_count = len(embeddings_df)
+
+        for _, row in embeddings_df.iterrows():
+            metadata = row.get("metadata", {})
+            doc_date_str = metadata.get("updated_at")
+
+            if not doc_date_str:
+                continue
+
+            doc_date = parse_date(doc_date_str)
+            if not doc_date:
+                continue
+
+            # Apply date filters
+            if start_date and doc_date < start_date:
+                filtered_count += 1
+                continue
+            if end_date and doc_date > end_date:
+                filtered_count += 1
+                continue
+
+            filtered_embeddings.append(row)
+
+        # Create new filtered DataFrame
+        if filtered_embeddings:
+            embeddings_df = pd.DataFrame(filtered_embeddings)
+            print(
+                f"Date filtering: {filtered_count} documents filtered out, {len(embeddings_df)} documents remain")
+        else:
+            print("No documents found within the specified date range")
+            return pd.DataFrame()
+
     return embeddings_df
 
 
 @app.task(bind=True, name="cluster_unit_documents")
-def cluster_unit_documents(self, prev_result: Dict, unit_id: str, auto_optimize: bool = True,
+def cluster_unit_documents(self, prev_result: Dict, unit_id: str, start_date, end_date, auto_optimize: bool = True,
                            min_cluster_size: int = 5, min_samples: int = 5) -> Dict:
     """
     Celery task to perform HDBSCAN clustering on documents for a specific unit.
@@ -75,7 +157,8 @@ def cluster_unit_documents(self, prev_result: Dict, unit_id: str, auto_optimize:
     vector_store = pc_service.Index(INDEX_NAME)
 
     # Get embeddings from vector database
-    embeddings_df = get_embeddings_from_db(namespace, vector_store)
+    embeddings_df = get_embeddings_from_db(
+        namespace, vector_store, start_date, end_date)
 
     if embeddings_df.empty:
         return {

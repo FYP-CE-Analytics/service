@@ -84,7 +84,7 @@ def fetch_and_store_threads(user_id: str = None) -> StoringTaskResult:
 
 
 @app.task
-def fetch_and_store_threads_by_unit(user_id: str, unit_id: str, transaction_id: str) -> StoringTaskResult:
+def fetch_and_store_threads_by_unit(user_id: str, unit_id: str, transaction_id: str, start_date=None, end_date=None) -> StoringTaskResult:
     """
     Fetch threads from a specific unit for a specific user and store in vector DB
 
@@ -132,6 +132,29 @@ def fetch_and_store_threads_by_unit(user_id: str, unit_id: str, transaction_id: 
     # Fetch threads for this unit
     print(f"Fetching threads for unit {unit_id}...")
     threads = ed_client.list_all_students_threads(course_id=unit_id)
+    if start_date and end_date:
+        from datetime import datetime
+
+        # Function to parse date from metadata
+        def parse_date(date_str):
+            if isinstance(date_str, str):
+                # Handle the format in the metadata: "2024-02-13 18:26:19.711432+11:00"
+                try:
+                    return datetime.fromisoformat(date_str)
+                except ValueError:
+                    try:
+                        # Fallback parsing if the format is different
+                        return datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S.%f%z")
+                    except ValueError:
+                        print(
+                            f"Warning: Could not parse date string: {date_str}")
+                        return None
+            return date_str  # If it's already a datetime object
+        # Filter threads picing thread with updated_at between start_date and end_date
+        threads = [
+            thread for thread in threads if parse_date(thread.updated_at) and parse_date(start_date) <= parse_date(thread.updated_at) <= parse_date(end_date)
+        ]
+
     print(f"Fetched {len(threads)} threads")
 
     # Process and store threads in vector DB

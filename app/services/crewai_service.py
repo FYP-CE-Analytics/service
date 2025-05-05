@@ -150,7 +150,7 @@ class UnitAnalysisCrewService:
 
         reportWritingTask = Task(
             description=(
-                "Compile a summary report for the teaching team based on this week's analysis. Include the following sections:\n"
+                "Compile a summary report for the teaching team based on this week's analysis(start date {start_date} to end date {end_date}). Include the following sections:\n"
                 "1.  **Overview:** Briefly state the period analyzed and the number of questions processed.\n"
                 "2.  **Major Themes:** List the key themes identified by the Theme Extractor, perhaps noting their frequency or the number of related questions found.\n"
                 "3.  **Assessment Links:** Briefly mention if/how the themes relate to specific assessments or unit content (using {assessment} and {content} context).\n"
@@ -185,12 +185,8 @@ class UnitAnalysisCrewService:
 
         crew = self.setup_crew(unit_id)
         # Prepare inputs specifically for kickoff, ensuring keys match task expectations
-        kickoff_inputs = {
-            "unit_name": unit_name,
-            "questions": inputs.questions,
-            "content": inputs.content,
-            "assessment": "",
-        }
-        print(f"Running crew with inputs: {kickoff_inputs}")
-        result = crew.kickoff(inputs=kickoff_inputs)
+
+        print(f"Running crew with inputs: {inputs.model_dump()}")
+        result = crew.kickoff(inputs=inputs.model_dump())
+        # Process the result to ensure it's in the expected format
         return result

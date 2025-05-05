@@ -7,13 +7,19 @@ from app.services.crewai_service import UnitAnalysisCrewService
 from app.const import VECTOR_INDEX_NAME
 from app.schemas.crewai_faq_service_schema import CrewAIFAQInputSchema
 from bson import ObjectId
-from app.db.session import MongoDatabase
 from app.schemas.tasks.cluster_schema import ClusterTaskResult, CoreDocument
 from app.repositories.task_transaction_repository import TaskTransactionRepository
+from pymongo import MongoClient
+import os
+from app.models import UnitModel
+
+# Get a direct connection to MongoDB
+client = MongoClient(os.getenv("MONGO_DATABASE_URI"))
+db = client[os.getenv('DB_NAME', 'ed_summarizer')]
 
 
 @app.task(bind=True, name="run_agent_analysis")
-def run_agent_analysis(self, clustering_result: dict = None, cluster_id: str = None, unit_id: str = None) -> Dict[str, Any]:
+def run_agent_analysis(self, clustering_result: dict = None, start_date=None, end_date=None, cluster_id: str = None, unit_id: str = None) -> Dict[str, Any]:
     """
     Celery task to run agent analysis on clustered questions.
     This task can be chained with the cluster_unit_documents task or run independently with a cluster_id.
@@ -76,20 +82,23 @@ def run_agent_analysis(self, clustering_result: dict = None, cluster_id: str = N
 
     # Use the session to fetch unit data
     # To do
-    # unit_data = db.units.find_one({"unit_id": unit_id})
-    # if not unit_data:
-    #     return {
-    #         "status": "error",
-    #         "message": f"Unit data not found for unit_id: {unit_id}",
-    #         "unit_id": unit_id
-    #     }
+    unit_data = db.unit.find_one({"_id": int(unit_id)})
+    print(f"unit_data: {unit_data}")
+    if not unit_data:
+        return {
+            "status": "error",
+            "message": f"Unit data not found for unit_id: {unit_id}",
+            "unit_id": unit_id
+        }
 
     # Prepare input for the crew service
     input_data = {
         "unit_id": unit_id,
-        "unit_name": "Network and Security",
+        "unit_name": unit_data.get("name", "") + " " + unit_data.get("description", ""),
         "questions": core_clustered_content,
-        "content": "Networking is the practice of connecting computers and other devices together to share resources. It involves the use of hardware and software to create a network that allows devices to communicate with each other. Networking is essential for modern computing, as it enables users to access the internet, share files, and collaborate on projects. There are many different types of networks, including local area networks (LANs), wide area networks (WANs), and wireless networks. Each type of network has its own unique characteristics and uses."
+        "content": unit_data.get("content", ""),
+        "start_date": start_date,
+        "end_date": end_date,
     }
 
     # Update task state
