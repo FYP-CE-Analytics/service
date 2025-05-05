@@ -6,6 +6,7 @@ from app import crud
 from odmantic.exceptions import DuplicateKeyError
 from app.services.ed_forum_service import EdService
 from odmantic import ObjectId
+from app.schemas.unit import UpdateUnitRequest
 router = APIRouter()
 
 
@@ -34,12 +35,16 @@ async def create_user(user: UserCreate, db=Depends(deps.get_db)):
 
 
 @router.get("/units", response_model=UserEdCoursesResponse)
-async def get_users_units(email: str, ed_service: EdService = Depends(deps.get_user_ed_service)):
+async def get_users_units(email: str, ed_service: EdService = Depends(deps.get_user_ed_service), db=Depends(deps.get_db)):
     """
     Get user's active courses
     """
     try:
         courses = await ed_service.get_user_active_courses()
+
+        for course in courses:
+            print(course)
+            await crud.unit.create(db, obj_in=course)
         return UserEdCoursesResponse(active=courses)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -74,7 +79,39 @@ async def set_user_units(
         )
 
         updated_user = await crud.user.update(db, db_obj=user, obj_in=update_data)
+
         print(updated_user)
         return UserResponse.from_model(updated_user)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/units/{unit_id}")
+async def get_user_unit_detail(unit_id: int, db=Depends(deps.get_db)):
+    """
+    Get user's unit detail
+    """
+    try:
+        unit = await crud.unit.get(db, {"id": int(unit_id)})
+        if not unit:
+            raise HTTPException(status_code=404, detail="Unit not found")
+        return unit
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/units/{unit_id}")
+async def set_user_unit_detail(unit_id, unit_info: UpdateUnitRequest, db=Depends(deps.get_db)):
+    """
+    Set user's unit detail
+    """
+    try:
+        unit = await crud.unit.get(db, {"id": int(unit_id)})
+
+        if not unit:
+            raise HTTPException(status_code=404, detail="Unit not found")
+
+        updated_unit = await crud.unit.update(db, db_obj=unit, obj_in=unit_info)
+        return updated_unit
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

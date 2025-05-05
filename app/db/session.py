@@ -3,7 +3,7 @@ from app.core.config import settings
 from motor import motor_asyncio, core
 from odmantic import AIOEngine
 from pymongo.driver_info import DriverInfo
-from app.models import UserModel, StoringRunRecordModel, ClusterResultModel, TaskTransactionModel
+from app.models import UserModel, StoringRunRecordModel, ClusterResultModel, TaskTransactionModel, UnitModel
 
 DRIVER_INFO = DriverInfo(
     name="full-stack-fastapi-mongodb", version=__version__)
@@ -17,7 +17,9 @@ class _MongoClientSingleton:
         if not hasattr(cls, "instance"):
             cls.instance = super(_MongoClientSingleton, cls).__new__(cls)
             cls.instance.mongo_client = motor_asyncio.AsyncIOMotorClient(
-                settings.MONGO_DATABASE_URI, driver=DRIVER_INFO
+                settings.MONGO_DATABASE_URI,
+                driver=DRIVER_INFO,
+                retryWrites=True
             )
             cls.instance.engine = AIOEngine(
                 client=cls.instance.mongo_client, database=settings.MONGO_DATABASE_NAME)
@@ -38,7 +40,7 @@ async def ping():
 
 async def init_indexes():
     engine = get_engine()
-    await engine.configure_database([UserModel, StoringRunRecordModel, ClusterResultModel, TaskTransactionModel])
+    await engine.configure_database([UserModel, StoringRunRecordModel, ClusterResultModel, TaskTransactionModel, UnitModel])
     print("Indexes created successfully.")
 
 
