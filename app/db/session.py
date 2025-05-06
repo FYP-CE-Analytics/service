@@ -16,10 +16,10 @@ class _MongoClientSingleton:
     def __new__(cls):
         if not hasattr(cls, "instance"):
             cls.instance = super(_MongoClientSingleton, cls).__new__(cls)
+            uri = settings.MONGO_DATABASE_URI
             cls.instance.mongo_client = motor_asyncio.AsyncIOMotorClient(
-                settings.MONGO_DATABASE_URI,
+                uri,
                 driver=DRIVER_INFO,
-                retryWrites=True
             )
             cls.instance.engine = AIOEngine(
                 client=cls.instance.mongo_client, database=settings.MONGO_DATABASE_NAME)
