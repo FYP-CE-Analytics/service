@@ -63,54 +63,77 @@ async def run_chain_task(request: RunTaskRequest):
     # Execute the chain
     result = task_chain.apply_async()
 
-    return {"transactionId": str(transcation_record.id), "status": result.status}
+    return {"transactionId": str(transcation_record.id), "status": result.status, "progress": 0}
 
 
-@router.get("/status/{task_id}")
-async def get_task_status(task_id: str):
+@router.get("/status/{transaction_id}")
+async def get_transaction_status(transaction_id: str):
     """
-    Get the status of a Celery task.
+    Get the status of a specific transaction.
+
+    Args:
+        transaction_id: ID of the transaction to check
+
+    Returns:
+        Status of the transaction
+    """
+    try:
+        # Fetch the task status from the database
+        repo = TaskTransactionRepository()
+        task_status = await repo.get_task_by_id(transaction_id)
+        if not task_status:
+            raise HTTPException(
+                status_code=404, detail="Transaction not found")
+        if task_status.status == "PENDING":
+            progress = 0
+        elif task_status.status == "SUCCESS":
+            progress = 100
+        elif task_status.status == "FAILURE":
+            progress = 0
+        elif task_status.status == "running fetch_and_store_threads_by_unit":
+            progress = 10
+        elif task_status.status == "finish clustering":
+            progress = 60
+        elif task_status.status == "running agent analysis":
+            progress = 80
+
+        return {
+            "transaction_id": transaction_id,
+            "status": task_status.status,
+            "progress": progress}
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching transaction status: {str(e)}"
+        )
+
+
+@router.get("/task/{task_id}")
+async def get_task_by_id(task_id: str):
+    """
+    Get task details by task ID.
 
     Args:
         task_id: ID of the task to check
 
     Returns:
-        Current status and result/error if available
+        Task details
     """
     try:
-        # Get task result using the task_id
-        result = AsyncResult(task_id, app=celery_app)
+        # Fetch task details from the database
+        repo = TaskTransactionRepository()
+        task_details = await repo.get_transaction_by_id(task_id)
+        if not task_details:
+            raise HTTPException(
+                status_code=404, detail="Task not found")
 
-        response = {
-            "task_id": task_id,
-            "status": result.state
-        }
-
-        # Add more details based on the state
-        if result.state == 'SUCCESS':
-            # Include the task result
-            response["result"] = result.result
-        elif result.state == 'FAILURE':
-            # Include the error information
-            response["error"] = str(
-                result.info) if result.info else "Unknown error"
-        elif result.state == 'REVOKED':
-            response["message"] = "Task was cancelled"
-        elif result.state in ['STARTED', 'PROGRESS']:
-            # Include progress information if available
-            if isinstance(result.info, dict) and 'current' in result.info and 'total' in result.info:
-                response["progress"] = {
-                    "current": result.info['current'],
-                    "total": result.info['total'],
-                    "percent": int((result.info['current'] / result.info['total']) * 100)
-                }
-
-        return response
+        return task_details
 
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error checking task status: {str(e)}"
+            detail=f"Error fetching task details: {str(e)}"
         )
 
 

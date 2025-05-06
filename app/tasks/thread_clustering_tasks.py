@@ -145,7 +145,7 @@ def cluster_unit_documents(self, prev_result: Dict, unit_id: str, start_date, en
     task_transaction_repo = TaskTransactionRepository()
     # Update the task transaction if needed
     task_transaction_repo.update_task_status_sync(
-        id=prev_transaction_id,
+        task_id=prev_transaction_id,
         status="finish clustering"
     )
 

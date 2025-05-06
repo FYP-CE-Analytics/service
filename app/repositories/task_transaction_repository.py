@@ -27,27 +27,9 @@ class TaskTransactionRepository:
         )
         return await self.engine.save(task)
 
-    async def update_task_status(self, id: str, status: str,
-                                 error_message: str = "",
-                                 result: Dict[str, Any] = None) -> Optional[TaskTransactionModel]:
-        """Update task status and optional fields"""
-        task = await self.engine.find_one(TaskTransactionModel, TaskTransactionModel.id == id)
-        if not task:
-            return None
-
-        task.status = status
-        if status in ["completed", "success"]:
-            task.completed_at = datetime.now()
-        if error_message:
-            task.error_message = error_message
-        if result:
-            task.result = result
-
-        return await self.engine.save(task)
-
-    async def get_task_by_id(self, task_id: str) -> Optional[TaskTransactionModel]:
+    async def get_transaction_by_id(self, trans_id: str) -> Optional[TaskTransactionModel]:
         """Get task by its Celery task ID"""
-        return await self.engine.find_one(TaskTransactionModel, TaskTransactionModel.task_id == task_id)
+        return await self.engine.find_one(TaskTransactionModel,  TaskTransactionModel.id == ObjectId(trans_id))
 
     async def get_tasks_by_unit_id(self, unit_id: str) -> List[TaskTransactionModel]:
         """Get all tasks for a unit"""
@@ -75,7 +57,7 @@ class TaskTransactionRepository:
         task["_id"] = result.inserted_id
         return task
 
-    def update_task_status_sync(self, id: str, status: str,
+    def update_task_status_sync(self, task_id: str, status: str,
                                 error_message: str = "",
                                 result: Dict[str, Any] = None) -> Optional[Dict]:
         """Update task status and optional fields synchronously"""
@@ -91,9 +73,9 @@ class TaskTransactionRepository:
 
             # Find the document
             transaction = db[self.collection_name].find_one(
-                {"_id": ObjectId(id)})
+                {"_id": ObjectId(task_id)})
             if not transaction:
-                print(f"Transaction with id {id} not found")
+                print(f"Transaction with id {task_id} not found")
                 return None
 
             # Prepare update data
@@ -107,13 +89,13 @@ class TaskTransactionRepository:
 
             # Use update_one with $set operator instead of replace_one
             db[self.collection_name].update_one(
-                {"_id": ObjectId(id)},
+                {"_id": ObjectId(task_id)},
                 {"$set": update_data}
             )
 
             # Return the updated document
             updated_transaction = db[self.collection_name].find_one(
-                {"_id": ObjectId(id)})
+                {"_id": ObjectId(task_id)})
             return updated_transaction
 
         except Exception as e:

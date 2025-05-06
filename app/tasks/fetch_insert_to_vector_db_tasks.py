@@ -102,7 +102,7 @@ def fetch_and_store_threads_by_unit(user_id: str, unit_id: str, transaction_id: 
     user = db.user.find_one({"_id": user_id})
     task_transaction_repo = TaskTransactionRepository()
     task_transaction_repo.update_task_status_sync(
-        id=transaction_id,
+        task_id=transaction_id,
         status="running fetch_and_store_threads_by_unit",
 
     )
@@ -162,7 +162,7 @@ def fetch_and_store_threads_by_unit(user_id: str, unit_id: str, transaction_id: 
     insert_to_vector_db(documents, namespace=namespace)
     if len(documents) == 0:
         task_transaction_repo.update_task_status_sync(
-            id=transaction_id,
+            task_id=transaction_id,
             status="completed",
             error_message="No threads found to store",
             result={}

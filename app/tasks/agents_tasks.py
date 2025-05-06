@@ -36,7 +36,7 @@ def run_agent_analysis(self, clustering_result: dict = None, start_date=None, en
 
     transaction_id = clustering_result.get("transaction_id")
     task_repo.update_task_status_sync(
-        id=transaction_id,
+        task_id=transaction_id,
         status="running agent analysis",
     )
     print(
@@ -125,7 +125,7 @@ def run_agent_analysis(self, clustering_result: dict = None, start_date=None, en
     result = UnitAnalysisCrewService(
         index_name=VECTOR_INDEX_NAME).run(CrewAIFAQInputSchema(**input_data)).model_dump()
     task_repo.update_task_status_sync(
-        id=transaction_id,
+        task_id=transaction_id,
         status="completed",
         result=result
     )
