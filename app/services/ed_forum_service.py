@@ -1,5 +1,7 @@
 from edapi import EdAPI, User as EdUser
+from edapi.models.course import CourseInfo
 from fastapi import HTTPException
+from typing import List
 
 
 class EdService:
@@ -34,7 +36,7 @@ class EdService:
                 detail=f"Error fetching user info from Ed: {str(e)}"
             )
 
-    async def get_user_active_courses(self) -> list:
+    async def get_user_active_courses(self) -> List[CourseInfo]:
         """Get user's active courses"""
         user = await self.get_user_info()
 
