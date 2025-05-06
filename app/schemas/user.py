@@ -1,5 +1,4 @@
-from pydantic import EmailStr, Field, ConfigDict
-from edapi import CourseInfo
+from pydantic import EmailStr, Field, BaseModel
 from typing import List, Optional
 from bson import ObjectId
 from odmantic.bson import BaseBSONModel, ObjectId
@@ -30,18 +29,39 @@ class UserCreate(UserBase):
     """Schema for creating a new user"""
     api_key: str
     # Make selected_unit_ids optional during creation
-    selected_unit: List[UnitSyncInfo] = Field(
-        default_factory=list,
-        description="List of selected unit IDs for the user."
-    )
+    # selected_unit: Optional[List[UnitSyncInfo]] = Field(
+    #     default_factory=list,
+    #     description="List of selected unit IDs for the user."
+    # )
+
+
+class CourseInfo(BaseModel):
+    id: int
+    code: str
+    name: str
+    year: str
+    session: str
+    status: str
 
 
 class UserUpdate(BaseBSONModel):
     """Schema for updating an existing user"""
     name: Optional[str] = None
     email: Optional[EmailStr] = None
-    api_key: Optional[str] = None
-    selected_units: Optional[List[UnitSyncInfo]] = None
+    api_key: Optional[str] = Field(None, alias="apiKey")
+    selected_units: Optional[List[UnitSyncInfo]] = Field(
+        default_factory=list,
+        description="List of selected unit IDs for the user.",
+        alias="selectedUnits"
+    )
+
+    class Config:
+        populate_by_name = True  # Important to make aliases work
+
+
+class UserEdCoursesResponse(BaseBSONModel):
+    """Response schema for Ed courses"""
+    active: list[CourseInfo]
 
 
 class UserResponse(BaseBSONModel):
@@ -49,6 +69,7 @@ class UserResponse(BaseBSONModel):
     name: str
     email: EmailStr
     selectedUnits: List[UnitSyncInfo] = Field(default_factory=list)
+    availableUnits: List[CourseInfo] = Field(default_factory=list)
 
     @classmethod
     def from_model(cls, user: UserModel):
@@ -59,14 +80,8 @@ class UserResponse(BaseBSONModel):
             email=user.email,
             selectedUnits=[
                 UnitSyncInfo.from_model(unit) for unit in user.selected_units
+            ],
+            availableUnits=[
+                CourseInfo(**unit.model_dump()) for unit in user.available_units
             ]
         )
-
-
-class UserEdCoursesResponse(BaseBSONModel):
-    """Response schema for Ed courses"""
-    active: list[CourseInfo]
-
-
-class UnitIdsUpdate(BaseBSONModel):
-    selectedUnitIds: List[int]
