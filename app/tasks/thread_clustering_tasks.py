@@ -86,7 +86,7 @@ def get_embeddings_from_db(namespace, vector_store, start_date=None, end_date=No
 
         for _, row in embeddings_df.iterrows():
             metadata = row.get("metadata", {})
-            doc_date_str = metadata.get("updated_at")
+            doc_date_str = metadata.get("created_at")
 
             if not doc_date_str:
                 continue
@@ -119,7 +119,7 @@ def get_embeddings_from_db(namespace, vector_store, start_date=None, end_date=No
 
 @app.task(bind=True, name="cluster_unit_documents")
 def cluster_unit_documents(self, prev_result: Dict, unit_id: str, start_date, end_date, auto_optimize: bool = True,
-                           min_cluster_size: int = 5, min_samples: int = 5) -> Dict:
+                           min_cluster_size: int = 2, min_samples: int = 2) -> Dict:
     """
     Celery task to perform HDBSCAN clustering on documents for a specific unit.
     Gets the embeddings from vector database - from previous task
@@ -145,7 +145,7 @@ def cluster_unit_documents(self, prev_result: Dict, unit_id: str, start_date, en
     task_transaction_repo = TaskTransactionRepository()
     # Update the task transaction if needed
     task_transaction_repo.update_task_status_sync(
-        id=prev_transaction_id,
+        task_id=prev_transaction_id,
         status="finish clustering"
     )
 
@@ -173,7 +173,7 @@ def cluster_unit_documents(self, prev_result: Dict, unit_id: str, start_date, en
                             "unit_id": unit_id})
 
     # Determine parameters - either auto-optimize or use provided values
-    if auto_optimize:
+    if auto_optimize and len(embeddings_df) > 10:
         # self.update_state(state="PROCESSING",
         #                   meta={"status": "Optimizing clustering parameters", "unit_id": unit_id})
         min_cluster_size, min_samples, metric = optimize_hdbscan_parameters(
@@ -193,6 +193,14 @@ def cluster_unit_documents(self, prev_result: Dict, unit_id: str, start_date, en
         min_samples=min_samples,
         metric=metric
     )
+
+    # if core_docs is empty then just use the first 10 documents
+    if not core_docs:
+        core_docs = {str(i): {
+            'id': doc.get('id'),
+            'probability': float(doc.get('probability', 0)),
+            'metadata': doc.get('metadata', {})
+        } for i, doc in enumerate(embeddings_df.head(10).to_dict(orient='records'))}
 
     print(f"Core documents: {core_docs}")
 

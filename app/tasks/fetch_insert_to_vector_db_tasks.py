@@ -12,6 +12,7 @@ from app.schemas.tasks.storing_task_schema import StoringTaskResult
 from datetime import datetime
 from bson import ObjectId
 from app.repositories.task_transaction_repository import TaskTransactionRepository
+from app.utils.shared import parse_date
 # Load environment variables
 load_dotenv()
 
@@ -67,7 +68,7 @@ def fetch_and_store_threads(user_id: str = None) -> StoringTaskResult:
                     "id": str(thread.id),
                     "category": thread.category,
                     "content": thread_content,
-                    "updated_at": thread.updated_at,
+                    "created_at": thread.created_at,
                 })
         insert_to_vector_db(documents, namespace=str(unit_info["unit_id"]))
         processed_units.add(unit_id)
@@ -101,7 +102,7 @@ def fetch_and_store_threads_by_unit(user_id: str, unit_id: str, transaction_id: 
     user = db.user.find_one({"_id": user_id})
     task_transaction_repo = TaskTransactionRepository()
     task_transaction_repo.update_task_status_sync(
-        id=transaction_id,
+        task_id=transaction_id,
         status="running fetch_and_store_threads_by_unit",
 
     )
@@ -135,24 +136,12 @@ def fetch_and_store_threads_by_unit(user_id: str, unit_id: str, transaction_id: 
     if start_date and end_date:
         from datetime import datetime
 
-        # Function to parse date from metadata
-        def parse_date(date_str):
-            if isinstance(date_str, str):
-                # Handle the format in the metadata: "2024-02-13 18:26:19.711432+11:00"
-                try:
-                    return datetime.fromisoformat(date_str)
-                except ValueError:
-                    try:
-                        # Fallback parsing if the format is different
-                        return datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S.%f%z")
-                    except ValueError:
-                        print(
-                            f"Warning: Could not parse date string: {date_str}")
-                        return None
-            return date_str  # If it's already a datetime object
         # Filter threads picing thread with updated_at between start_date and end_date
+        print(
+            f"Total threads fetched before filtering {start_date} to {end_date}: {len(threads)}")
+        print(f"first few threads: {threads[:5]}")
         threads = [
-            thread for thread in threads if parse_date(thread.updated_at) and parse_date(start_date) <= parse_date(thread.updated_at) <= parse_date(end_date)
+            thread for thread in threads if parse_date(thread.created_at) and parse_date(start_date) <= parse_date(thread.created_at) <= parse_date(end_date)
         ]
 
     print(f"Fetched {len(threads)} threads")
@@ -165,12 +154,21 @@ def fetch_and_store_threads_by_unit(user_id: str, unit_id: str, transaction_id: 
             "id": str(thread.id),
             "category": thread.category,
             "content": thread_content,
-            "updated_at": str(thread.updated_at),
+            "created_at": str(thread.created_at),
         })
 
     # Insert into vector DB
     namespace = str(unit_id)
     insert_to_vector_db(documents, namespace=namespace)
+    if len(documents) == 0:
+        task_transaction_repo.update_task_status_sync(
+            task_id=transaction_id,
+            status="completed",
+            error_message="No threads found to store",
+            result={}
+        )
+        raise ValueError(
+            f"No threads found for unit {unit_id} in the specified date range, please check the dates")
 
     # Record the task
     db.task_records.insert_one({

@@ -1,7 +1,6 @@
 from app.tasks.thread_clustering_tasks import cluster_unit_documents
 from celery import chain
 from typing import Dict, List, Any, Optional
-from datetime import datetime
 from celery_worker import app
 from app.services.crewai_service import UnitAnalysisCrewService
 from app.const import VECTOR_INDEX_NAME
@@ -12,6 +11,7 @@ from app.repositories.task_transaction_repository import TaskTransactionReposito
 from pymongo import MongoClient
 import os
 from app.models import UnitModel
+from app.utils.shared import parse_date
 
 # Get a direct connection to MongoDB
 client = MongoClient(os.getenv("MONGO_DATABASE_URI"))
@@ -36,7 +36,7 @@ def run_agent_analysis(self, clustering_result: dict = None, start_date=None, en
 
     transaction_id = clustering_result.get("transaction_id")
     task_repo.update_task_status_sync(
-        id=transaction_id,
+        task_id=transaction_id,
         status="running agent analysis",
     )
     print(
@@ -56,18 +56,12 @@ def run_agent_analysis(self, clustering_result: dict = None, start_date=None, en
     self.update_state(state="PROCESSING",
                       meta={"status": "Retrieving clustered questions", "unit_id": unit_id})
 
-    # if not cluster_doc:
-    #     return {
-    #         "status": "error",
-    #         "message": f"Cluster with ID {cluster_id} not found",
-    #         "unit_id": unit_id
-    #     }
-
     # Extract clustered questions from the core docs
     core_clustered_docs: List[CoreDocument] = clustering_result.result.core_docs
-    core_clustered_content = [doc.metadata.model_dump(mode='json')
-                              for doc in core_clustered_docs]
-
+    core_clustered_content = [
+        {"id": doc.id, "metadata": doc.metadata.model_dump(mode='json')}
+        for doc in core_clustered_docs
+    ]
     print(core_clustered_content)
     if not core_clustered_docs:
         return {
@@ -83,13 +77,33 @@ def run_agent_analysis(self, clustering_result: dict = None, start_date=None, en
     # Use the session to fetch unit data
     # To do
     unit_data = db.unit.find_one({"_id": int(unit_id)})
-    print(f"unit_data: {unit_data}")
+
     if not unit_data:
         return {
             "status": "error",
             "message": f"Unit data not found for unit_id: {unit_id}",
             "unit_id": unit_id
         }
+    weekly_content = []
+    weeks = []
+    # extract weekly contetnt
+    if start_date and end_date:
+        for index, week in enumerate(unit_data.get("weeks", [])):
+            week_start_date = week.get("start_date")
+            week_end_date = week.get("end_date")
+            # store the index of the week
+
+            week_start_date = parse_date(week_start_date) if isinstance(
+                week_start_date, str) else week_start_date
+            week_end_date = parse_date(week_end_date) if isinstance(
+                week_end_date, str) else week_end_date
+            start_date = parse_date(
+                start_date) if isinstance(start_date, str) else start_date
+            end_date = parse_date(
+                end_date) if isinstance(end_date, str) else end_date
+            if start_date <= week_end_date and end_date >= week_start_date:
+                weekly_content.append(week.get("content", ""))
+                weeks.append(str(index+1))
 
     # Prepare input for the crew service
     input_data = {
@@ -97,8 +111,11 @@ def run_agent_analysis(self, clustering_result: dict = None, start_date=None, en
         "unit_name": unit_data.get("name", "") + " " + unit_data.get("description", ""),
         "questions": core_clustered_content,
         "content": unit_data.get("content", ""),
-        "start_date": start_date,
-        "end_date": end_date,
+        "start_date": str(start_date),
+        "end_date": str(end_date),
+        "weeks": weeks,
+        "weekly_content": weekly_content,
+
     }
 
     # Update task state
@@ -108,7 +125,7 @@ def run_agent_analysis(self, clustering_result: dict = None, start_date=None, en
     result = UnitAnalysisCrewService(
         index_name=VECTOR_INDEX_NAME).run(CrewAIFAQInputSchema(**input_data)).model_dump()
     task_repo.update_task_status_sync(
-        id=transaction_id,
+        task_id=transaction_id,
         status="completed",
         result=result
     )

@@ -8,10 +8,12 @@ from app.db.session import init_indexes
 app = FastAPI(swagger_ui_parameters={"defaultModelsExpandDepth": -1})
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins
+    allow_origins=["http://localhost:3000",
+                   "https://ed-summarizer.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],  # Allow all methods
     allow_headers=["*"],  # Allow all headers
+
 )
 
 
@@ -35,3 +37,4 @@ async def health():
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
+    print("Server started at port", 8000)
