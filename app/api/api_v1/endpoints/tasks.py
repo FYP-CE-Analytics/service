@@ -80,7 +80,7 @@ async def get_transaction_status(transaction_id: str):
     try:
         # Fetch the task status from the database
         repo = TaskTransactionRepository()
-        task_status = await repo.get_task_by_id(transaction_id)
+        task_status = await repo.get_transaction_by_id(transaction_id)
         if not task_status:
             raise HTTPException(
                 status_code=404, detail="Transaction not found")
@@ -96,6 +96,8 @@ async def get_transaction_status(transaction_id: str):
             progress = 60
         elif task_status.status == "running agent analysis":
             progress = 80
+        else:
+            progress = 0
 
         return {
             "transaction_id": transaction_id,
