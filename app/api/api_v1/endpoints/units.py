@@ -32,6 +32,6 @@ async def update_unit(unit_id: int, unit_update: UpdateUnitRequest, db=Depends(d
         if not unit:
             raise HTTPException(status_code=404, detail="Unit not found")
         updated_unit = await crud.unit.update(db=db, db_obj=unit, obj_in=unit_update)
-        return updated_unit
+        return UnitResponse.from_model(updated_unit)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

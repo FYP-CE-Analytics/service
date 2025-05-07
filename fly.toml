@@ -6,15 +6,26 @@
 app = 'ed-summariser-server'
 primary_region = 'syd'
 
+[processes]
+  app = "/app/.venv/bin/python -m app.main"
+  worker = "/app/.venv/bin/python celery_worker.py"
+
 [http_service]
   internal_port = 8000
   force_https = true
   auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
-  processes = ['app']
+  processes = ['app'] 
 
 [[vm]]
   memory = '1gb'
   cpu_kind = 'shared'
   cpus = 1
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+  processes = ["worker"]  # This VM runs the worker
