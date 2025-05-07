@@ -45,7 +45,6 @@ class CRUDUser(CRUDBase[UserModel, UserCreate, UserUpdate]):
             if not user:
                 raise HTTPException(
                     status_code=404, detail=f"User with ID {email} not found")
-
             # Create Ed service with user's API key
             ed_service = EdService(user.api_key)
 
@@ -56,7 +55,6 @@ class CRUDUser(CRUDBase[UserModel, UserCreate, UserUpdate]):
                     db, db_obj=user, obj_in={"available_units": [UnitInfoModel(
                         **course.model_dump()) for course in current_courses]}
                 )
-
                 new_units = []
                 # Sync units to the units collection
                 for course in current_courses:
@@ -74,6 +72,8 @@ class CRUDUser(CRUDBase[UserModel, UserCreate, UserUpdate]):
                 })
             except Exception as e:
                 print(f"Error syncing units: {str(e)}")
+                return user
+                # might need to hadle this
                 # raise HTTPException(
                 #     status_code=401, detail=f"Please check your API key: {str(e)}")
 
