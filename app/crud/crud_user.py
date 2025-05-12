@@ -23,7 +23,7 @@ class CRUDUser(CRUDBase[UserModel, UserCreate, UserUpdate]):
         ed_service = EdService(api_key)
         try:
             active_courses = await ed_service.get_user_active_courses()
-            user["available_units"] = [course.model_dump() for course in active_courses]
+            user["available_units"] = [course.model_dump(exclude={'last_active'}) for course in active_courses]
 
             print(user)
         except Exception as e:
@@ -58,7 +58,7 @@ class CRUDUser(CRUDBase[UserModel, UserCreate, UserUpdate]):
                 existing_unit_ids = {unit.id for unit in existing_units}
 
                 # Update available units in user model
-                user.available_units = [course.model_dump() for course in current_courses]                    
+                user.available_units = [course.model_dump(exclude={'last_active'}) for course in current_courses]                    
 
                 # Update user
                 updated_user = await self.update(db, db_obj=user, obj_in=user)
