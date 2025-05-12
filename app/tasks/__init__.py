@@ -1,3 +1,3 @@
-from .agents_tasks import run_agent_analysis
+from .agents_tasks import run_faq_agent_analysis
 from .thread_clustering_tasks import cluster_unit_documents
 from .fetch_insert_to_vector_db_tasks import fetch_and_store_threads

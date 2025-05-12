@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from app.tasks.fetch_insert_to_vector_db_tasks import fetch_and_store_threads, fetch_and_store_threads_by_unit
 from app.tasks.thread_clustering_tasks import cluster_unit_documents
-from app.tasks.agents_tasks import run_agent_analysis
+from app.tasks.agents_tasks import run_faq_agent_analysis
 from celery import chain
 from celery.result import AsyncResult
 from celery_worker import app as celery_app
@@ -38,7 +38,7 @@ async def trigger_agent_analysis_task(unit_id: str, cluster_id: str):
     Trigger the Celery task to run agent analysis on clustered questions.
     """
     # Call the Celery task
-    res = run_agent_analysis.delay(unit_id, cluster_id)
+    res = run_faq_agent_analysis.delay(unit_id, cluster_id)
 
 
 @router.post("/run_chain/")
@@ -58,7 +58,7 @@ async def run_chain_task(request: RunTaskRequest):
             request.userId, request.unitId, str(transcation_record.id), request.startDate, request.endDate),
         cluster_unit_documents.s(
             request.unitId, request.startDate, request.endDate),
-        run_agent_analysis.s(request.startDate, request.endDate)
+        run_faq_agent_analysis.s(request.startDate, request.endDate)
     )
     # Execute the chain
     result = task_chain.apply_async()
