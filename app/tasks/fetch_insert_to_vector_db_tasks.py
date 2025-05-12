@@ -1,6 +1,5 @@
 from celery import Celery, chain
 from edapi import EdAPI
-from edapi.models.user import User
 from typing import List, Dict, Any
 import os
 from dotenv import load_dotenv

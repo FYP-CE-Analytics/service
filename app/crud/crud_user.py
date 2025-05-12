@@ -8,7 +8,6 @@ from odmantic import ObjectId
 from app.crud.crud_unit import unit
 from typing import Dict, Any, List
 from app.models.unit_dashboard import UnitStatus
-from edapi.models.course import CourseInfo
 from datetime import datetime
 
 
