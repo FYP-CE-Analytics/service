@@ -12,7 +12,7 @@ class CRUDUnit(CRUDBase[UnitModel, CourseInfo, UpdateUnitRequest]):
             **obj_in.model_dump()
         }
 
-        return await self.engine.save(UnitModel(id=unit["id"], name=unit["name"], status=unit["status"], code=unit["code"],))
+        return await self.engine.save(UnitModel(**unit))
 
 
 unit = CRUDUnit(UnitModel)

@@ -72,3 +72,15 @@ class UnitResponse(BaseModel):
             weeks=[{
                 "weekNumber": week.week_number, "startDate": week.start_date, "endDate": week.end_date, "content": week.content} for week in unit.weeks]
         )
+
+
+class ThreadRequest(BaseModel):
+    """
+    Schema for thread request
+    """
+    user_id: int = Field(..., description="User ID")
+    course_id: int = Field(..., description="Course ID")
+    limit: Optional[int] = Field(..., description="Limit")
+    offset: Optional[int] = Field(..., description="Offset")
+
+    

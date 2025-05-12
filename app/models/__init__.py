@@ -4,3 +4,4 @@ from .storing_threads_record import StoringRunRecordModel
 from .clusters_result import DocumentClusterModel, ClusterParametersModel, ClusterResultModel
 from .task_transaction import TaskTransactionModel
 from .unit_dashboard import UnitModel
+from .question_cluster import QuestionClusterModel

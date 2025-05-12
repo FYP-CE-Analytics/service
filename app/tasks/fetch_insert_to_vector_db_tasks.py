@@ -114,14 +114,7 @@ def fetch_and_store_threads_by_unit(user_id: str, unit_id: str, transaction_id: 
         except Exception as e:
             print(f"Error converting to ObjectId: {e}")
     print(f"User: {user}")
-    # Check if the unit is in user's selected units
-    selected_units = user.get('selected_units', [])
-    print(f"Selected units: {selected_units}")
-    unit_info = None
-    for unit in selected_units:
-        if unit["unit_id"] == unit_id:
-            unit_info = unit
-            break
+
 
     # if not unit_info:
     #     raise ValueError(
