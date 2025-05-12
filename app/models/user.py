@@ -1,29 +1,25 @@
-from odmantic import Field, Index, EmbeddedModel, Model
+from odmantic import Field, EmbeddedModel, Model
 from pydantic.networks import EmailStr
+from typing import List
 from datetime import datetime
-from typing import Optional
-from pydantic import field_validator
 
 
-class UnitSyncInfoModel(EmbeddedModel):
-    unit_id: int
-    last_synced: Optional[datetime] = Field(default=None)
-
-
-class UnitInfoModel(EmbeddedModel):
-    id: int
-    name: str
-    code: str
-    year: str
-    session: str
-    status: str = Field(default="active")
-
+class CourseInfoEmbededModel(EmbeddedModel):
+    id: int = Field(...)
+    code: str = Field(...)
+    name: str = Field(...)
+    year: str = Field(...)
+    session: str = Field(...)
+    status: str = Field(...)
+    created_at: str = Field(...)
+    status: str = Field(...)
 
 class UserModel(Model):
+    name: str = Field(...)
+    email: EmailStr = Field(unique=True)
+    api_key: str = Field(...)
+    selected_units: List[CourseInfoEmbededModel] = Field(default_factory=list)
+    available_units: List[CourseInfoEmbededModel] = Field(default_factory=list)  # Direct CourseInfo from Ed API
+    previous_units: List[CourseInfoEmbededModel] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
-    name: str = Field(default="")
-    email: EmailStr = Field(unique=True)
-    api_key: str = Field(default=None)
-    selected_units: list[UnitSyncInfoModel] = Field(default_factory=list)
-    available_units: list[UnitInfoModel] = Field(default_factory=list)

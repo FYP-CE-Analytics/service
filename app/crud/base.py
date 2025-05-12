@@ -42,9 +42,32 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             raise ValueError("No valid query conditions provided")
         return await self.engine.find_one(self.model, *query_conditions)
 
-    async def get_multi(self, db: AgnosticDatabase, *, page: int = 0, page_break: bool = False) -> list[ModelType]:  # noqa
-        offset = {"skip": page * settings.MULTI_MAX, "limit": settings.MULTI_MAX} if page_break else {}  # noqa
-        return await self.engine.find(self.model, **offset)
+    async def get_multi(
+        self, 
+        db: AgnosticDatabase, 
+        filter: Dict[str, Any] = None,
+        *, 
+        page: int = 0, 
+        page_break: bool = False
+    ) -> list[ModelType]:
+        """
+        Get multiple objects with optional filtering
+        """
+        query_conditions = []
+        if filter:
+            for field_name, field_value in filter.items():
+                if hasattr(self.model, field_name):
+                    model_field = getattr(self.model, field_name)
+                    if isinstance(field_value, dict) and "$in" in field_value:
+                        query_conditions.append(model_field.in_(field_value["$in"]))
+                    else:
+                        query_conditions.append(model_field == field_value)
+                else:
+                    raise ValueError(
+                        f"Field {field_name} does not exist in model {self.model.__name__}")
+
+        offset = {"skip": page * settings.MULTI_MAX, "limit": settings.MULTI_MAX} if page_break else {}
+        return await self.engine.find(self.model, *query_conditions, **offset)
 
     async def create(self, db: AgnosticDatabase, *, obj_in: CreateSchemaType) -> ModelType:  # noqa
         obj_in_data = jsonable_encoder(obj_in)

@@ -1,6 +1,15 @@
 from odmantic import Field, Model, EmbeddedModel
 from datetime import datetime
 from typing import Dict, Any, Optional, List
+from enum import Enum
+from pydantic import field_validator
+
+
+class UnitStatus(str, Enum):
+    ACTIVE = "active"  # Currently selected by user
+    PAST = "past"      # Previously selected but now removed
+    AVAILABLE = "available"  # Available but not selected
+    ARCHIVED = "archived"    # No longer available in Ed
 
 
 class UnitWeeks(EmbeddedModel):
@@ -13,6 +22,30 @@ class UnitWeeks(EmbeddedModel):
     content: str = Field(default="")
 
 
+class ThreadMetadata(EmbeddedModel):
+    """
+    Model representing thread metadata stored in unit
+    """
+    id: str = Field(...)
+    title: str = Field(default="")
+    content: str = Field(default="")
+    created_at: str = Field(default="")  # Store as ISO format string
+    updated_at: str = Field(default="")  # Store as ISO format string
+    is_answered: bool = Field(default=False)
+    needs_attention: bool = Field(default=False)  # Simple flag for attention
+    themes: List[str] = Field(default_factory=list)  # Multiple themes per thread
+    last_sync_at: str = Field(default="")  # Store as ISO format string
+    
+    # Additional metadata fields
+    unique_views: int = Field(default=0)
+    vote_count: int = Field(default=0)
+    thread_type: str = Field(default="")
+    category: str = Field(default="")
+    subcategory: str = Field(default="")
+    subsubcategory: str = Field(default="")
+    user_id: int = Field(default=0)
+
+
 class UnitModel(Model):
     """
     Model representing a unit in the system.
@@ -23,10 +56,14 @@ class UnitModel(Model):
     code: str = Field(default="")
     description: str = Field(default="")
     content: str = Field(default="")
-    year: int = Field(default=datetime.now().year)
+    year: str = Field(...)
     session: str = Field(default="")
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)
-    status: str = Field(default="active")
+    created_at: str = Field(default="")  # Store as ISO format string
+    updated_at: str = Field(default="")  # Store as ISO format string
+    status: UnitStatus = Field(default=UnitStatus.ACTIVE)
     weeks: List[UnitWeeks] = Field(default_factory=list)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    last_sync_at: str = Field(default="")  # Store as ISO format string
+    thread_count: int = Field(default=0)
+    threads: List[ThreadMetadata] = Field(default_factory=list)  # Store thread metadata
+    question_cluster_ids: List[str] = Field(default_factory=list)  # Reference to question clusters
