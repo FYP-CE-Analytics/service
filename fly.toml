@@ -7,7 +7,7 @@ app = 'ed-summariser-server'
 primary_region = 'syd'
 
 [processes]
-  app = "/app/.venv/bin/python -m app.main"
+  app = "/app/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000"
   worker = "/app/.venv/bin/python celery_worker.py"
 
 [http_service]
