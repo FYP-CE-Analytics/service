@@ -5,6 +5,9 @@ from odmantic.bson import BaseBSONModel, ObjectId
 from app.models.user import UserModel
 from edapi.models.course import CourseInfo
 
+# exclude last_active from CourseInfo
+class CourseInfoNoLastActive(CourseInfo):
+    last_active: Optional[str] = None
 
 
 class UserBase(BaseBSONModel):
@@ -38,9 +41,9 @@ class UserResponse(BaseBSONModel):
     name: str
     email: EmailStr
     api_key: str = Field(alias="apiKey")
-    selected_units: List[CourseInfo] = Field(default_factory=list, alias="selectedUnits")
-    available_units: List[CourseInfo] = Field(default_factory=list, alias="availableUnits")
-    previous_units: List[CourseInfo] = Field(default_factory=list, alias="previousUnits")
+    selected_units: List[CourseInfoNoLastActive] = Field(default_factory=list, alias="selectedUnits")
+    available_units: List[CourseInfoNoLastActive] = Field(default_factory=list, alias="availableUnits")
+    previous_units: List[CourseInfoNoLastActive] = Field(default_factory=list, alias="previousUnits")
 
     model_config = ConfigDict(
         populate_by_name=True,
