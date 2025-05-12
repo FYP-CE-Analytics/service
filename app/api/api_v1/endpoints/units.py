@@ -12,7 +12,7 @@ from app.models.unit_dashboard import ThreadMetadata
 from app.db.session import get_engine
 
 router = APIRouter()
-cluster_repo = QuestionClusterRepository(engine=get_engine())
+cluster_repo = QuestionClusterRepository()
 
 
 @router.get("/{unit_id}", response_model=UnitResponse)
@@ -89,6 +89,21 @@ async def sync_unit_threads(
         # Process threads and update unit
         new_threads = []
         updated_threads = []
+         # Get clusters for this unit
+        clusters = await cluster_repo.get_clusters_by_date_range(
+            None,
+            None,
+            unit_id
+        )
+
+        # Create theme lookup from clusters
+        theme_lookup = {}
+        for cluster in clusters:
+            for qid in cluster.question_ids:
+                if qid not in theme_lookup:
+                    theme_lookup[qid] = []
+                theme_lookup[qid].append(cluster.theme)
+
         
         for thread in threads:
             # Skip social categories
@@ -116,12 +131,22 @@ async def sync_unit_threads(
                 user_id=thread.user_id
             )
             
+            # Merge cluster themes into new thread metadata
+            if thread.id in theme_lookup:
+                thread_meta.themes.extend(theme_lookup[thread.id])
+                thread_meta.themes = list(set(thread_meta.themes))
+            
             # Check if thread already exists
             if thread.id in existing_thread_ids:
                 # Update existing thread
                 for existing_thread in unit.threads:
+                    ## need to update the thread collection with the up to date themes
                     if existing_thread.id == str(thread.id):
                         # Update only if there are changes
+                        if thread.id in theme_lookup:
+                            existing_thread.themes.extend(theme_lookup[thread.id])
+                            existing_thread.themes = list(set(existing_thread.themes))  # Remove duplicates
+
                         if (existing_thread.updated_at != thread.updated_at or
                             existing_thread.content != thread.document or
                             existing_thread.title != thread.title):
@@ -142,7 +167,8 @@ async def sync_unit_threads(
                             
                             existing_thread.last_sync_at = datetime.now()
                             updated_threads.append(existing_thread)
-                        break
+                        
+                        break      
             else:
                 # Add new thread
                 new_threads.append(thread_meta)
@@ -188,20 +214,7 @@ async def get_unit_threads(
         if not unit:
             raise HTTPException(status_code=404, detail=f"Unit with ID {unit_id} not found")
 
-        # Get clusters for this unit
-        clusters = await cluster_repo.get_clusters_by_date_range(
-            parse_date(start_date) if start_date else None,
-            parse_date(end_date) if end_date else None,
-            unit_id
-        )
-
-        # Create theme lookup from clusters
-        theme_lookup = {}
-        for cluster in clusters:
-            for qid in cluster.question_ids:
-                if qid not in theme_lookup:
-                    theme_lookup[qid] = []
-                theme_lookup[qid].append(cluster.theme)
+        # Themes are synced during sync_unit_threads; skip cluster lookup here
 
         # Filter and paginate threads
         filtered_threads = unit.threads
@@ -225,15 +238,8 @@ async def get_unit_threads(
         # Get paginated threads
         paginated_threads = filtered_threads[start_idx:end_idx]
 
-        # Enrich threads with cluster themes
-        enriched_threads = []
-        for thread in paginated_threads:
-            thread_dict = thread.model_dump()
-            # Add themes from clusters
-            if thread.id in theme_lookup:
-                thread_dict["themes"].extend(theme_lookup[thread.id])
-                thread_dict["themes"] = list(set(thread_dict["themes"]))  # Remove duplicates
-            enriched_threads.append(thread_dict)
+        # Prepare response threads with pre-synced themes
+        enriched_threads = [thread.model_dump() for thread in paginated_threads]
 
         return {
             "unit_id": unit.id,

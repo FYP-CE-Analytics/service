@@ -108,11 +108,9 @@ class CRUDUser(CRUDBase[UserModel, UserCreate, UserUpdate]):
                     ## create needs  the full course info
                     ed_service = EdService(user.api_key)
                     course_info = await ed_service.get_course_info(unit_id)
-                    
+
                     # Convert datetime fields to ISO format strings
-                    course_info.created_at = course_info.created_at.isoformat() if type(course_info.created_at) == datetime else course_info.created_at
-                    course_info.last_active = course_info.last_active.isoformat() if type(course_info.last_active) == datetime else course_info.last_active
-                    
+                    course_info.created_at = course_info.created_at.isoformat() if type(course_info.created_at) == datetime else course_info.created_at                    
                     # Create unit
                     await unit.create(
                         db,
@@ -128,7 +126,6 @@ class CRUDUser(CRUDBase[UserModel, UserCreate, UserUpdate]):
                         "session": course_info.session,
                         "status": course_info.status,
                         "created_at": course_info.created_at,
-                        "last_active": course_info.last_active
                     }
                     updated_selected_units.append(selected_unit)
 

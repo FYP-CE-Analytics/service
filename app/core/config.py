@@ -9,6 +9,7 @@ class Settings():
     MONGO_DATABASE_URI: str = os.getenv(
         "MONGO_DATABASE_URI", "mongodb://admin:secret@localhost:27017")
     MONGO_DATABASE_NAME: str = os.getenv("DB_NAME", "ed_summarizer")
+    ED_BASE_URL: str = os.getenv("ED_BASE_URL", "https://edstem.org/au")
 
 
 settings = Settings()
