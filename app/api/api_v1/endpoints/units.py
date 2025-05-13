@@ -7,9 +7,9 @@ from odmantic import ObjectId
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from app.repositories.question_cluster_repository import QuestionClusterRepository
-from app.utils.shared import parse_date
+from app.utils.shared import is_within_interval, parse_date
 from app.models.unit_dashboard import ThreadMetadata
-from app.db.session import get_engine
+from app.repositories.task_transaction_repository import TaskTransactionRepository
 
 router = APIRouter()
 cluster_repo = QuestionClusterRepository()
@@ -22,7 +22,6 @@ async def get_user_unit_detail(unit_id: str, db=Depends(deps.get_db)):
     """
     # Avoid double try-except by handling common errors directly
     unit = await crud.unit.get(db, {"id": int(unit_id)})
-    print(unit)
 
     if not unit:
         raise HTTPException(
@@ -74,7 +73,6 @@ async def sync_unit_threads(
 
         # Get user's Ed service
         user = await crud.user.get(db, {"id": ObjectId(user_id)})
-        print(user)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
@@ -82,7 +80,6 @@ async def sync_unit_threads(
         
         # Fetch all threads from Ed
         threads = ed_service.client.list_all_students_threads(course_id=int(unit_id))
-        print(threads)
         # Create a set of existing thread IDs for quick lookup
         existing_thread_ids = {thread.id for thread in unit.threads}
         
@@ -117,18 +114,15 @@ async def sync_unit_threads(
                 content=thread.document,
                 created_at=thread.created_at.isoformat(),
                 updated_at=thread.updated_at.isoformat(),
-                is_answered=thread.vote_count > 0,  # Consider answered if has votes
+                is_answered=False, # need to update this to get the field from ed service 
                 needs_attention=False,  # Default to False, can be set based on business logic
-                themes=[thread.category, thread.subcategory, thread.subsubcategory],
+                themes=[],
                 last_sync_at=datetime.now().isoformat(),
                 # Additional metadata
-                unique_views=thread.unique_view_count,
                 vote_count=thread.vote_count,
                 thread_type=thread.type,
-                category=thread.category,
-                subcategory=thread.subcategory,
-                subsubcategory=thread.subsubcategory,
-                user_id=thread.user_id
+                category=thread.subcategory if thread.subcategory else thread.category,
+
             )
             
             # Merge cluster themes into new thread metadata
@@ -156,14 +150,9 @@ async def sync_unit_threads(
                             existing_thread.updated_at = thread.updated_at
                             existing_thread.is_answered = thread.vote_count > 0
                             
-                            # Update metadata fields
-                            existing_thread.unique_views = thread.unique_view_count
                             existing_thread.vote_count = thread.vote_count
                             existing_thread.thread_type = thread.type
-                            existing_thread.category = thread.category
-                            existing_thread.subcategory = thread.subcategory
-                            existing_thread.subsubcategory = thread.subsubcategory
-                            existing_thread.user_id = thread.user_id
+                            existing_thread.category = thread.subcategory if thread.subcategory else thread.category
                             
                             existing_thread.last_sync_at = datetime.now()
                             updated_threads.append(existing_thread)
@@ -177,6 +166,9 @@ async def sync_unit_threads(
         unit.threads.extend(new_threads)
         unit.last_sync_at = datetime.now().isoformat()
         unit.thread_count = len(unit.threads)
+        for week in unit.weeks:
+            week.thread_count = len([t for t in unit.threads if is_within_interval(t.created_at, week.start_date, week.end_date)])
+            
 
         await crud.unit.engine.save(unit)
         
@@ -257,5 +249,54 @@ async def get_unit_threads(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+@router.get("/{unit_id}/weeks")
+async def get_unit_weeks(
+    unit_id: str,
+    db=Depends(deps.get_db)
+):
+    """
+    Get weeks data for a unit with updated thread counts.
+    Thread counts are updated for the current week only.
+    Returns weeks data matching WeekConfig interface and transaction data.
+    """
+    try:
+        # Get unit
+        unit = await crud.unit.get(db, {"id": int(unit_id)})
+        if not unit:
+            raise HTTPException(status_code=404, detail=f"Unit with ID {unit_id} not found")
+
+        # Initialize task transaction repository
+        task_repo = TaskTransactionRepository()
+
+        # Get all tasks for this unit
+        tasks = await task_repo.get_tasks_by_unit_id(unit_id)
+
+        # Process each week
+        weeks_data = []
+        for week in unit.weeks:
+            # Format week data according to WeekConfig interface
+            week_data = {
+                "weekNumber": week.week_number,
+                "startDate": week.start_date,
+                "endDate": week.end_date,
+                "content": week.content,
+                "threadCount": week.thread_count,
+                "faqReports": [task for task in tasks if (task.task_name.lower().startswith("generating faq report") and
+                    is_within_interval(task.input.get("startDate"), week.start_date, week.end_date))]
+                
+                }
+            weeks_data.append(week_data)
+
+        return {
+            "unit_id": unit.id,
+            "unit_name": unit.name,
+            "weeks": weeks_data
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 

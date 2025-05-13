@@ -28,17 +28,24 @@ class PineconeVectorStore(VectorStoreBase):
             )
         self.index = self.pc_service.Index(self.index_name)
 
-    def search_with_string(self, query_string, collection_name, top_k=3, threshold=None, **kwargs):
-
-        response = self.index.search(namespace=collection_name, query={
-            "inputs": {"text": query_string},
+    def search_with_string(self, query_string, collection_name, week_number=None, top_k=3, threshold=0, **kwargs):
+        if week_number is not None:
+            response = self.index.search(namespace=collection_name, query={
+                "inputs": {"text": query_string},
+                "filter": { 
+                "week_number": {
+                    "$eq": week_number
+                }
+            },
             "top_k": top_k,
-        }, fields=["id", "content", "metadata"], rerank={
-            "model": "bge-reranker-v2-m3",
-            "rank_fields": ["content"]})
+        })
+        else:
+            response = self.index.search(namespace=collection_name, query={
+                "inputs": {"text": query_string},
+                "top_k": top_k,
+                }, fields=["id", "content", "metadata"])
         hits = response.get("result", {}).get("hits", [])
-        if threshold is not None:
-            hits = [hit for hit in hits if hit.get("_score", 0) > threshold]
+        hits = [hit for hit in hits if hit.get("_score", 0) > threshold]
         return hits
 
     def search_with_vector(self, vector: List[int], collection_name, top_k=3, threshold=None, **kwargs) -> VectorSearchResponse:
@@ -67,3 +74,14 @@ class PineconeVectorStore(VectorStoreBase):
 
     def get_embedding(self, text):
         return super().get_embedding(text)
+
+
+if __name__ == "__main__":
+    import os
+    api_key = os.getenv("PINECONE_API_KEY")
+
+    vs: PineconeVectorStore = PineconeVectorStore("ed-summarizer-index", "22913", api_key=api_key)
+    res = vs.search_with_string("lecture", "22913", top_k=10, week_number=3)
+    print(res)
+
+#

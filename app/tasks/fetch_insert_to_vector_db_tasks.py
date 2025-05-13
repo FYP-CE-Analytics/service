@@ -1,3 +1,4 @@
+import time
 from celery import Celery, chain
 from edapi import EdAPI
 from typing import List, Dict, Any
@@ -11,18 +12,12 @@ from app.schemas.tasks.storing_task_schema import StoringTaskResult
 from datetime import datetime
 from bson import ObjectId
 from app.repositories.task_transaction_repository import TaskTransactionRepository
-from app.utils.shared import parse_date
+from app.utils.shared import parse_date, is_within_interval
+from app.db.session import get_sync_client
 # Load environment variables
 load_dotenv()
 
-DB_URI = os.getenv("MONGO_DATABASE_URI")
-# Initialize Celery
-
-# Initialize connections
-client = MongoClient(DB_URI)
-db = client[os.getenv('DB_NAME', 'ed_summarizer')]
-
-# to do allow for unit ids to be passed
+db = get_sync_client()
 
 
 @app.task
@@ -103,21 +98,13 @@ def fetch_and_store_threads_by_unit(user_id: str, unit_id: str, transaction_id: 
     task_transaction_repo.update_task_status_sync(
         task_id=transaction_id,
         status="running fetch_and_store_threads_by_unit",
-
     )
-
     # If not found, try with ObjectId
     if not user:
         try:
             user = db.user.find_one({"_id": ObjectId(user_id)})
         except Exception as e:
             print(f"Error converting to ObjectId: {e}")
-    print(f"User: {user}")
-
-
-    # if not unit_info:
-    #     raise ValueError(
-    #         f"Unit with id {unit_id} not found in user's selected units")
 
     # Initialize Ed API client
     ed_client = EdAPI(user['api_key'])
@@ -125,28 +112,36 @@ def fetch_and_store_threads_by_unit(user_id: str, unit_id: str, transaction_id: 
     # Fetch threads for this unit
     print(f"Fetching threads for unit {unit_id}...")
     threads = ed_client.list_all_students_threads(course_id=unit_id)
-    if start_date and end_date:
-        from datetime import datetime
+    if start_date or end_date:
 
-        # Filter threads picing thread with updated_at between start_date and end_date
+        # Filter threads picing thread with between start_date and end_date
         print(
             f"Total threads fetched before filtering {start_date} to {end_date}: {len(threads)}")
         print(f"first few threads: {threads[:5]}")
         threads = [
-            thread for thread in threads if parse_date(thread.created_at) and parse_date(start_date) <= parse_date(thread.created_at) <= parse_date(end_date)
+            thread for thread in threads if is_within_interval(thread.created_at, start_date, end_date)
         ]
 
     print(f"Fetched {len(threads)} threads")
 
     # Process and store threads in vector DB
+    #need to assign week number to each thread
+    #get the week data from unit collection, return only the weeks field 
+    unit_data = db.unit.find_one({"_id": int(unit_id)}, {"weeks": 1})
+    # assign the weeks list from the document
+    weeks = unit_data.get("weeks", [])
     documents = []
     for thread in threads:
         thread_content = f"Title: {thread.title}\nContent: {thread.document}"
+        # find the week number from the weeks list
+        week_number = next((week['week_number'] for week in weeks if is_within_interval(thread.created_at, week.get("start_date"), week.get("end_date"))), None)
         documents.append({
             "id": str(thread.id),
-            "category": thread.category,
+            "category": thread.subcategory if thread.subcategory else thread.category,
             "content": thread_content,
             "created_at": str(thread.created_at),
+            "week_number": week_number
+
         })
 
     # Insert into vector DB
@@ -162,21 +157,24 @@ def fetch_and_store_threads_by_unit(user_id: str, unit_id: str, transaction_id: 
         raise ValueError(
             f"No threads found for unit {unit_id} in the specified date range, please check the dates")
 
-    # Record the task
-    db.task_records.insert_one({
-        "user_id": user_id,
-        "unit_ids": [unit_id],
-        "timestamp": datetime.now(),
-        "thread_count": len(threads)
-    })
-
-    return StoringTaskResult(
+    task_result = StoringTaskResult(
         status="success",
         message=f"Fetched and stored {len(threads)} threads for unit {unit_id}",
-        unit_ids=[unit_id],
+        result={
+            "unit_ids": [unit_id],
+            "thread_ids": [thread.id for thread in threads],
+        },
         transaction_id=transaction_id
+    )
 
-    ).model_dump()
+    task_transaction_repo.update_task_status_sync(
+        task_id=transaction_id,
+        status="inserting success",
+        result=task_result.model_dump()
+    )
+    print(f"Task result: {task_result.model_dump_json(indent=2)}")
+
+    return task_result.model_dump()
 
 
 def chunks(iterable, batch_size=200):
@@ -192,6 +190,7 @@ def insert_to_vector_db(documents: List[dict], namespace: str, index_name: str =
     """
     Insert documents into the vector database
     [{id:str, category:str, content: str }]
+    
     """
     index = pc_service.Index(index_name)
     print(index.describe_index_stats())
@@ -200,6 +199,8 @@ def insert_to_vector_db(documents: List[dict], namespace: str, index_name: str =
     print(f"Index Name: {index_name}")
 
     for batch in chunks(documents, batch_size=50):
+        ##batch is a list of thead dicts
+        ##maybe need to chunk the content within the thread dict
         print(f"Inserting batch of size {len(batch)}")
         try:
             index.upsert_records(
@@ -211,7 +212,7 @@ def insert_to_vector_db(documents: List[dict], namespace: str, index_name: str =
             print(f"Error inserting batch into vector DB: {e}")
 
             continue
-
+    time.sleep(10)
 
 if __name__ == "__main__":
     # Run the task

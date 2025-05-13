@@ -51,18 +51,16 @@ class CrewAIFAQInputSchema(BaseModel):
 
     )
 
-    weeks: list[str] = Field(
-        default_factory=list,
-        title="Weeks",
-        description="List of weeks in the unit.",
-        example=["Week 1: Introduction", "Week 2: Advanced Topics"]
+    week: int = Field(
+        title="Week",
+        description="The week number of the unit.",
+        example=1
     )
 
-    weekly_content: list[str] = Field(
-        default_factory=list,
+    weekly_content: str = Field(
         title="Weekly Content",
-        description="List of weekly content in the unit.",
-        example=["Week 1: Introduction to CrewAI", "Week 2: Advanced Topics"]
+        description="The weekly content of the unit.",
+        example="Week 1: Introduction to CrewAI"
     )
 
 
