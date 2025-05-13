@@ -59,16 +59,16 @@ class UserResponse(BaseBSONModel):
             email=user.email,
             api_key=user.api_key,
             selected_units=[
-                CourseInfo(
+                CourseInfoNoLastActive(
                     **unit.model_dump(),
                 ) for unit in user.selected_units
             ],
             available_units=[
-                CourseInfo(**unit.model_dump())
+                CourseInfoNoLastActive(**unit.model_dump())
                 for unit in user.available_units
             ],
             previous_units=[
-                CourseInfo(
+                CourseInfoNoLastActive(
                     **unit.model_dump(),
                 ) for unit in user.previous_units
             ]

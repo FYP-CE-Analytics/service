@@ -48,7 +48,7 @@ async def run_chain_task(request: RunTaskRequest):
     to do validation and error handling
     """
     repo = TaskTransactionRepository()
-    transcation_record = await repo.create_task(task_name="run_chain_task",
+    transcation_record = await repo.create_task(task_name=f"Generating Threads for {request.unitId} on {request.startDate} to {request.endDate}",
                                                 user_id=request.userId,
                                                 unit_id=request.unitId,
                                                 input=request.model_dump())
