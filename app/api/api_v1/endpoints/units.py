@@ -22,7 +22,6 @@ async def get_user_unit_detail(unit_id: str, db=Depends(deps.get_db)):
     """
     # Avoid double try-except by handling common errors directly
     unit = await crud.unit.get(db, {"id": int(unit_id)})
-    print(unit)
 
     if not unit:
         raise HTTPException(
@@ -74,7 +73,6 @@ async def sync_unit_threads(
 
         # Get user's Ed service
         user = await crud.user.get(db, {"id": ObjectId(user_id)})
-        print(user)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
@@ -82,7 +80,6 @@ async def sync_unit_threads(
         
         # Fetch all threads from Ed
         threads = ed_service.client.list_all_students_threads(course_id=int(unit_id))
-        print(threads)
         # Create a set of existing thread IDs for quick lookup
         existing_thread_ids = {thread.id for thread in unit.threads}
         

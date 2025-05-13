@@ -1,22 +1,19 @@
-from sklearn.cluster import KMeans as SKLearnKMeans, HDBSCAN
+from sklearn.cluster import HDBSCAN
 import numpy as np
 from celery_worker import app
 from app.services.pinecone_service import pc_service, INDEX_NAME
 import pandas as pd
-from typing import Dict, List, Any, Optional
-from pymongo import MongoClient
+from typing import Dict, List, Any
 from datetime import datetime
 from app.core import config
-from app.models.clusters_result import ClusterResultModel, DocumentClusterModel
 from app.schemas.tasks.cluster_schema import ClusterRecord, ClusterTaskResult
-from app.db.session import MongoDatabase
+from app.db.session import get_sync_client
 from app.repositories.task_transaction_repository import TaskTransactionRepository
 
-client = MongoClient(config.settings.MONGO_DATABASE_URI)
-db = client.get_database(config.settings.MONGO_DATABASE_NAME)
+db = get_sync_client()
 
 
-def get_embeddings_from_db(namespace, vector_store, start_date=None, end_date=None) -> pd.DataFrame:
+def get_embeddings_from_db(namespace, vector_store, ids: List[str]) -> pd.DataFrame:
     """
     Fetch embeddings from the database for a given namespace with optional date filtering.
 
@@ -30,14 +27,14 @@ def get_embeddings_from_db(namespace, vector_store, start_date=None, end_date=No
         DataFrame with embeddings and metadata
     """
     # Get all ids in the namespace
-    ids = list(vector_store.list(namespace=namespace))
 
     if not ids:
         print(f"No documents found for namespace: {namespace}")
         return pd.DataFrame()
 
     # Fetch all embeddings from the vector store
-    embeddings = vector_store.fetch(ids[0], namespace=namespace)
+    print(f"Fetching embeddings for {ids} documents")
+    embeddings = vector_store.fetch(ids, namespace=namespace)
     embeddings_dict = embeddings.vectors
 
     # Convert to a list of dictionaries for DataFrame conversion
@@ -47,78 +44,11 @@ def get_embeddings_from_db(namespace, vector_store, start_date=None, end_date=No
     # Create DataFrame from all embeddings
     embeddings_df = pd.DataFrame(embeddings)
 
-    if embeddings_df.empty:
-        return embeddings_df
-
-    # Apply date filtering if dates are provided
-    if start_date or end_date:
-        print(f"Filtering documents by date range: {start_date} to {end_date}")
-
-        # Convert string dates to datetime if they're not already
-        from datetime import datetime
-
-        # Function to parse date from metadata
-        def parse_date(date_str):
-            if isinstance(date_str, str):
-                # Handle the format in the metadata: "2024-02-13 18:26:19.711432+11:00"
-                try:
-                    return datetime.fromisoformat(date_str)
-                except ValueError:
-                    try:
-                        # Fallback parsing if the format is different
-                        return datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S.%f%z")
-                    except ValueError:
-                        print(
-                            f"Warning: Could not parse date string: {date_str}")
-                        return None
-            return date_str  # If it's already a datetime object
-
-        # Convert filter dates
-        if start_date and isinstance(start_date, str):
-            start_date = parse_date(start_date)
-        if end_date and isinstance(end_date, str):
-            end_date = parse_date(end_date)
-
-        # Filter the DataFrame based on dates
-        filtered_embeddings = []
-        filtered_count = 0
-        total_count = len(embeddings_df)
-
-        for _, row in embeddings_df.iterrows():
-            metadata = row.get("metadata", {})
-            doc_date_str = metadata.get("created_at")
-
-            if not doc_date_str:
-                continue
-
-            doc_date = parse_date(doc_date_str)
-            if not doc_date:
-                continue
-
-            # Apply date filters
-            if start_date and doc_date < start_date:
-                filtered_count += 1
-                continue
-            if end_date and doc_date > end_date:
-                filtered_count += 1
-                continue
-
-            filtered_embeddings.append(row)
-
-        # Create new filtered DataFrame
-        if filtered_embeddings:
-            embeddings_df = pd.DataFrame(filtered_embeddings)
-            print(
-                f"Date filtering: {filtered_count} documents filtered out, {len(embeddings_df)} documents remain")
-        else:
-            print("No documents found within the specified date range")
-            return pd.DataFrame()
-
     return embeddings_df
 
 
 @app.task(bind=True, name="cluster_unit_documents")
-def cluster_unit_documents(self, prev_result: Dict, unit_id: str, start_date, end_date, auto_optimize: bool = True,
+def cluster_unit_documents(self, prev_req: Dict, unit_id: str, start_date, end_date, auto_optimize: bool = True,
                            min_cluster_size: int = 2, min_samples: int = 2) -> Dict:
     """
     Celery task to perform HDBSCAN clustering on documents for a specific unit.
@@ -132,18 +62,18 @@ def cluster_unit_documents(self, prev_result: Dict, unit_id: str, start_date, en
         min_samples: Minimum samples parameter for HDBSCAN
     """
     # Check if previous task was successful
-    if prev_result.get("status") != "success":
-        print(f"Previous task failed: {prev_result.get('message')}")
-        return prev_result  # Forward the error
+    if prev_req.get("status") != "success":
+        print(f"Previous task failed: {prev_req.get('message')}")
+        return prev_req  # Forward the error
 
     print(f"Starting clustering task for unit_id: {unit_id}")
-    print(f"Previous task result: {prev_result}")
+    print(f"Previous task result: {prev_req}")
 
-    # Extract data from previous task if needed
-    prev_transaction_id = prev_result.get("transaction_id")
-
+    # Extract data from previous task
+    prev_transaction_id = prev_req.get("transaction_id")
+    thread_ids = prev_req.get("result").get("thread_ids")
     task_transaction_repo = TaskTransactionRepository()
-    # Update the task transaction if needed
+    # Update the task transaction 
     task_transaction_repo.update_task_status_sync(
         task_id=prev_transaction_id,
         status="finish clustering"
@@ -158,7 +88,7 @@ def cluster_unit_documents(self, prev_result: Dict, unit_id: str, start_date, en
 
     # Get embeddings from vector database
     embeddings_df = get_embeddings_from_db(
-        namespace, vector_store, start_date, end_date)
+        namespace, vector_store, thread_ids)
 
     if embeddings_df.empty:
         return {
