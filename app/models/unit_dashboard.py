@@ -20,6 +20,7 @@ class UnitWeeks(EmbeddedModel):
     start_date: datetime = Field(default_factory=datetime.now)
     end_date: datetime = Field(default_factory=datetime.now)
     content: str = Field(default="")
+    thread_count: int = Field(default=0)
 
 
 class ThreadMetadata(EmbeddedModel):
@@ -37,13 +38,10 @@ class ThreadMetadata(EmbeddedModel):
     last_sync_at: str = Field(default="")  # Store as ISO format string
     
     # Additional metadata fields
-    unique_views: int = Field(default=0)
     vote_count: int = Field(default=0)
     thread_type: str = Field(default="")
     category: str = Field(default="")
-    subcategory: str = Field(default="")
-    subsubcategory: str = Field(default="")
-    user_id: int = Field(default=0)
+
 
 
 class UnitModel(Model):
