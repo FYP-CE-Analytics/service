@@ -25,6 +25,8 @@ def get_embeddings_from_db(namespace, vector_store, ids: List[str]) -> pd.DataFr
 
     Returns:
         DataFrame with embeddings and metadata
+
+    to do: collection take time to load so need to wait for it to load
     """
     # Get all ids in the namespace
 

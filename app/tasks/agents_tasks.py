@@ -1,23 +1,16 @@
-from app.tasks.thread_clustering_tasks import cluster_unit_documents
-from celery import chain
 from typing import Dict, List, Any, Optional
 from celery_worker import app
 from app.services.crewai_service import UnitFAQCrewService, UnitTrendAnalysisCrewService    
 from app.const import VECTOR_INDEX_NAME
 from app.schemas.crewai_faq_service_schema import CrewAIFAQInputSchema
-from bson import ObjectId
 from app.schemas.tasks.cluster_schema import ClusterTaskResult, CoreDocument
 from app.repositories.task_transaction_repository import TaskTransactionRepository
-
-from app.services.ed_forum_service import get_ed_service
 from pymongo import MongoClient
 import os
-from app.models import UnitModel
 from app.utils.shared import parse_date
-import asyncio
-from functools import partial
 from app.utils.cluster_utils import create_question_clusters
 from app.db.session import get_sync_client
+from app.utils.shared import is_within_interval
 
 # Get a direct connection to MongoDB
 client = MongoClient(os.getenv("MONGO_DATABASE_URI"))
@@ -85,34 +78,10 @@ def run_faq_agent_analysis(self, clustering_result: dict = None, start_date=None
 
     # Use the session to fetch unit data
     # To do
-    unit_data = db.unit.find_one({"_id": int(unit_id)})
-
-    if not unit_data:
-        return {
-            "status": "error",
-            "message": f"Unit data not found for unit_id: {unit_id}",
-            "unit_id": unit_id
-        }
-    weekly_content = []
-    weeks = []
-    # extract weekly contetnt
-    if start_date and end_date:
-        for index, week in enumerate(unit_data.get("weeks", [])):
-            week_start_date = week.get("start_date")
-            week_end_date = week.get("end_date")
-            # store the index of the week
-
-            week_start_date = parse_date(week_start_date) if isinstance(
-                week_start_date, str) else week_start_date
-            week_end_date = parse_date(week_end_date) if isinstance(
-                week_end_date, str) else week_end_date
-            start_date = parse_date(
-                start_date) if isinstance(start_date, str) else start_date
-            end_date = parse_date(
-                end_date) if isinstance(end_date, str) else end_date
-            if start_date <= week_end_date and end_date >= week_start_date:
-                weekly_content.append(week.get("content", ""))
-                weeks.append(str(index+1))
+    unit_data = db.unit.find_one({"_id": int(unit_id)}, {"weeks": 1})
+    # assign the weeks list from the document
+    weeks = unit_data.get("weeks", [])
+    selected_week = next((week for week in weeks if is_within_interval(start_date, week.get("start_date"), week.get("end_date"))), None)
 
     # Prepare input for the crew service
     input_data = {
@@ -122,8 +91,8 @@ def run_faq_agent_analysis(self, clustering_result: dict = None, start_date=None
         "content": unit_data.get("content", ""),
         "start_date": str(start_date),
         "end_date": str(end_date),
-        "weeks": weeks,
-        "weekly_content": weekly_content,
+        "week": selected_week.get("week_number"),
+        "weekly_content": selected_week.get("content"),
     }
 
     # Update task state
