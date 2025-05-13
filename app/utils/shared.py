@@ -48,3 +48,9 @@ def parse_date(date_input):
 
     # Return None for unsupported types
     return None
+
+def is_within_interval(date, start_date, end_date):
+    start_date = parse_date(start_date).date()
+    end_date = parse_date(end_date).date()
+    date = parse_date(date).date()
+    return start_date <= date <= end_date

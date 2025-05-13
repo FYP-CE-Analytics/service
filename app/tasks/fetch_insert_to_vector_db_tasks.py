@@ -1,3 +1,4 @@
+import time
 from celery import Celery, chain
 from edapi import EdAPI
 from typing import List, Dict, Any
@@ -11,7 +12,7 @@ from app.schemas.tasks.storing_task_schema import StoringTaskResult
 from datetime import datetime
 from bson import ObjectId
 from app.repositories.task_transaction_repository import TaskTransactionRepository
-from app.utils.shared import parse_date
+from app.utils.shared import parse_date, is_within_interval
 from app.db.session import get_sync_client
 # Load environment variables
 load_dotenv()
@@ -97,9 +98,7 @@ def fetch_and_store_threads_by_unit(user_id: str, unit_id: str, transaction_id: 
     task_transaction_repo.update_task_status_sync(
         task_id=transaction_id,
         status="running fetch_and_store_threads_by_unit",
-
     )
-
     # If not found, try with ObjectId
     if not user:
         try:
@@ -114,28 +113,35 @@ def fetch_and_store_threads_by_unit(user_id: str, unit_id: str, transaction_id: 
     print(f"Fetching threads for unit {unit_id}...")
     threads = ed_client.list_all_students_threads(course_id=unit_id)
     if start_date or end_date:
-        start_date = parse_date(start_date)
-        end_date = parse_date(end_date).date()
 
-        # Filter threads picing thread with updated_at between start_date and end_date
+        # Filter threads picing thread with between start_date and end_date
         print(
             f"Total threads fetched before filtering {start_date} to {end_date}: {len(threads)}")
         print(f"first few threads: {threads[:5]}")
         threads = [
-            thread for thread in threads if parse_date(thread.created_at) and start_date.date() <= parse_date(thread.created_at).date() <= end_date
+            thread for thread in threads if is_within_interval(thread.created_at, start_date, end_date)
         ]
 
     print(f"Fetched {len(threads)} threads")
 
     # Process and store threads in vector DB
+    #need to assign week number to each thread
+    #get the week data from unit collection, return only the weeks field 
+    unit_data = db.unit.find_one({"_id": int(unit_id)}, {"weeks": 1})
+    # assign the weeks list from the document
+    weeks = unit_data.get("weeks", [])
     documents = []
     for thread in threads:
         thread_content = f"Title: {thread.title}\nContent: {thread.document}"
+        # find the week number from the weeks list
+        week_number = next((week['week_number'] for week in weeks if is_within_interval(thread.created_at, week.get("start_date"), week.get("end_date"))), None)
         documents.append({
             "id": str(thread.id),
-            "category": thread.category,
+            "category": thread.subcategory if thread.subcategory else thread.category,
             "content": thread_content,
             "created_at": str(thread.created_at),
+            "week_number": week_number
+
         })
 
     # Insert into vector DB
@@ -206,7 +212,7 @@ def insert_to_vector_db(documents: List[dict], namespace: str, index_name: str =
             print(f"Error inserting batch into vector DB: {e}")
 
             continue
-
+    time.sleep(10)
 
 if __name__ == "__main__":
     # Run the task

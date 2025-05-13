@@ -27,8 +27,9 @@ class QuestionVectorSearchTool(BaseTool):
     vectorstore: Any = None
     collection_name: str = ""
     threshold: float = 0.1
+    week_number: int = 0
 
-    def __init__(self,  index_name: str, collection_name: str, start_date: str, end_date: str, threshold=0.1, **kwargs):
+    def __init__(self,  index_name: str, collection_name: str, week_number: int, threshold=0.1, **kwargs):
         super().__init__(**kwargs)
         try:
             api_key = os.getenv("PINECONE_API_KEY")
@@ -43,6 +44,7 @@ class QuestionVectorSearchTool(BaseTool):
             )
             self.collection_name = collection_name
             self.threshold = threshold
+            self.week_number = week_number
             print(
                 f"Vector store initialized for collection: {collection_name}")
         except Exception as e:
@@ -58,7 +60,7 @@ class QuestionVectorSearchTool(BaseTool):
 
         try:
             results = self.vectorstore.search_with_string(
-                query_string=query_string, collection_name=self.collection_name, top_k=5)
+                query_string=query_string, collection_name=self.collection_name, week_number=self.week_number)
             if not results:
                 return [{"resukt": "No related questions found."}]
             # if results:
@@ -85,22 +87,20 @@ class UnitFAQCrewService:
         self.theme_extractor_task = None
         self.faq_writer_task = None
         self.report_writer_task = None
-
-    def _initialize_tools(self, collection_name: str, start_date, end_date) -> None:
+    def _initialize_tools(self, collection_name: str, week_number: int, **kwargs) -> None:
         """Initializes tools that depend on the unit (collection_name)."""
         print(f"Initializing tools for collection: {collection_name}")
         self.rag_tool = QuestionVectorSearchTool(
             index_name=self.index_name,
             collection_name=collection_name,
-            start_date=start_date,
-            end_date=end_date,
-
+            week_number=week_number,
+            **kwargs
         )
         # self.file_writer_tool = FileWriterTool()
 
-    def setup_crew(self, unit_id: str, start_date, end_date) -> Crew:
+    def setup_crew(self, unit_id: str, week_number: int) -> Crew:
         """Sets up the Crew for a specific unit."""
-        self._initialize_tools(unit_id, start_date, end_date)
+        self._initialize_tools(collection_name=unit_id, week_number=week_number)
 
         # Define Agents
         themeExtractorAgent = Agent(
@@ -136,7 +136,7 @@ class UnitFAQCrewService:
         # Define Tasks
         self.theme_extractor_task = Task(
             description=(
-                "Analyze the list of top questions provided: {questions} on the given weeks {weeks} "
+                "Analyze the list of top questions provided: {questions} on the given week {week} "
                 "For each question, use the vector search tool with the question's content as the query to find the top 3 semantically similar questions from the forum knowledge base. "
                 "Group related questions together based on similarity and content. "
                 "Identify the common underlying theme or point of confusion for each group. "
@@ -181,26 +181,6 @@ class UnitFAQCrewService:
             output_pydantic=CrewAIFAQOutputSchema
         )
 
-        # reportWritingTask = Task(
-        #     description=(
-        #         "Compile a summary report for the teaching team based on this week's analysis(start date {start_date} to end date {end_date} at week {weeks}). Include the following sections:\n"
-        #         "1.  **Overview:** Briefly state the period analyzed and the number of questions processed.\n"
-        #         "2.  **Major Themes:** List the key themes identified by the Theme Extractor, perhaps noting their frequency or the number of related questions found.\n"
-        #         "3.  **Assessment Links:** Briefly mention if/how the themes relate to specific assessments or unit content (using {assessment} and Unit overall{content} weekly contain where the questions was asked {weekly_content} context).\n"
-        #         "4   **Admin or Technical Issues:** List any unrelated questions or issues that were identified"
-        #         "5.  **Potential Blockers:** Highlight any significant misconceptions or difficulties indicated by the themes.\n"
-        #         "6.  **Draft FAQ:** Include the generated FAQ questions from the FAQ Writer.\n"
-        #         "Structure the report for clarity and easy digestion by educators"
-        #     ),
-        #     expected_output=(
-        #         "A well-structured weekly report document summarizing student question trends, analysis, and the generated FAQ draft."
-        #     ),
-        #     agent=reportWriterAgent,
-        #     # Depends on both previous tasks
-        #     context=[themeExtractorTask, faqWritingTask],
-        #     output_pydantic=CrewAIFAQOutputSchema,
-        # )
-        # Create and return the Crew
         crew = Crew(
             agents=[themeExtractorAgent, faqWriterAgent, reportWriterAgent],
             tasks=[self.theme_extractor_task, self.faq_writer_task ],
@@ -214,12 +194,13 @@ class UnitFAQCrewService:
         """Runs the Crew with the given inputs."""
         unit_id = inputs.unit_id
         unit_name = inputs.unit_name
+        week_number = inputs.week
         if not unit_id or not unit_name:
             raise ValueError(
                 "unit_id and unit_name must be provided in inputs")
 
         crew = self.setup_crew(
-            unit_id, start_date=inputs.start_date, end_date=inputs.end_date)
+            unit_id, week_number=week_number)
         # Prepare inputs specifically for kickoff, ensuring keys match task expectations
 
         print(f"Running crew with inputs: {inputs.model_dump()}")
