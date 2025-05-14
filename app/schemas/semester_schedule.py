@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from typing import List
 from datetime import datetime
 from app.models.semester_schedule import SemesterPhaseType, SemesterModel
+from pydantic import ConfigDict
 
 
 class SemesterPhaseSchema(BaseModel):
@@ -9,8 +10,8 @@ class SemesterPhaseSchema(BaseModel):
     Schema for a semester phase (e.g., teaching period, break).
     """
     type: SemesterPhaseType = Field(..., description="Phase type")
-    startDate: datetime = Field(..., description="Phase start date")
-    endDate: datetime = Field(..., description="Phase end date")
+    start_date: datetime = Field(..., alias="startDate", description="Phase start date")
+    end_date: datetime = Field(..., alias="endDate", description="Phase end date")
 
 class SemesterCreate(BaseModel):
     """
