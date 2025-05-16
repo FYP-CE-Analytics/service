@@ -1,64 +1,24 @@
-# flyctl launch added from .gitignore
-**\.idea
-**\.venv
-**\.env
-**\__pycache__
-**\.mongodb
+# Ignore local venv
+.venv/
 
-# flyctl launch added from .idea\.gitignore
-# Default ignored files
-.idea\shelf
-.idea\workspace.xml
-# Editor-based HTTP Client requests
-.idea\httpRequests
-# Datasource local storage ignored files
-.idea\dataSources
-.idea\dataSources.local.xml
+# Python byte-code & caches
+__pycache__/
+*.pyc
+*.pyo
 
-# flyctl launch added from .venv\.gitignore
-.venv\**\*
+# Local database / data directories
+.mongodb/
 
-# flyctl launch added from .venv\Lib\site-packages\crewai\cli\templates\crew\.gitignore
-.venv\Lib\site-packages\crewai\cli\templates\crew\**\.env
-.venv\Lib\site-packages\crewai\cli\templates\crew\**\__pycache__
-.venv\Lib\site-packages\crewai\cli\templates\crew\**\.DS_Store
+# Environment files & logs
+.env
+*.log
 
-# flyctl launch added from .venv\Lib\site-packages\crewai\cli\templates\flow\.gitignore
-.venv\Lib\site-packages\crewai\cli\templates\flow\**\.env
-.venv\Lib\site-packages\crewai\cli\templates\flow\**\__pycache__
-.venv\Lib\site-packages\crewai\cli\templates\flow\**\lib
-.venv\Lib\site-packages\crewai\cli\templates\flow\**\.DS_Store
+# VCS & Docker-related
+.git/
+.gitignore
+.dockerignore
 
-# flyctl launch added from .venv\Lib\site-packages\crewai\cli\templates\tool\.gitignore
-# Python-generated files
-.venv\Lib\site-packages\crewai\cli\templates\tool\**\__pycache__
-.venv\Lib\site-packages\crewai\cli\templates\tool\**\*.py[oc]
-.venv\Lib\site-packages\crewai\cli\templates\tool\**\build
-.venv\Lib\site-packages\crewai\cli\templates\tool\**\dist
-.venv\Lib\site-packages\crewai\cli\templates\tool\**\wheels
-.venv\Lib\site-packages\crewai\cli\templates\tool\**\*.egg-info
-
-# Virtual environments
-.venv\Lib\site-packages\crewai\cli\templates\tool\**\.venv
-
-# flyctl launch added from .venv\Lib\site-packages\debugpy\_vendored\pydevd\_pydevd_frame_eval\.gitignore
-.venv\Lib\site-packages\debugpy\_vendored\pydevd\_pydevd_frame_eval\pydevd_frame_evaluator.*.so
-.venv\Lib\site-packages\debugpy\_vendored\pydevd\_pydevd_frame_eval\pydevd_frame_evaluator.*.pyd
-.venv\Lib\site-packages\debugpy\_vendored\pydevd\_pydevd_frame_eval\pydevd_frame_evaluator.pyx
-
-# flyctl launch added from .venv\Lib\site-packages\debugpy\_vendored\pydevd\pydevd_attach_to_process\linux_and_mac\.gitignore
-.venv\Lib\site-packages\debugpy\_vendored\pydevd\pydevd_attach_to_process\linux_and_mac\attach_x86.dylib
-.venv\Lib\site-packages\debugpy\_vendored\pydevd\pydevd_attach_to_process\linux_and_mac\attach_x86_64.dylib
-.venv\Lib\site-packages\debugpy\_vendored\pydevd\pydevd_attach_to_process\linux_and_mac\attach_linux_x86.o
-.venv\Lib\site-packages\debugpy\_vendored\pydevd\pydevd_attach_to_process\linux_and_mac\attach_linux_x86_64.o
-
-# flyctl launch added from .venv\Lib\site-packages\embedchain\deployment\modal.com\.gitignore
-.venv\Lib\site-packages\embedchain\deployment\modal.com\**\.env
-
-# flyctl launch added from .venv\Lib\site-packages\embedchain\deployment\render.com\.gitignore
-.venv\Lib\site-packages\embedchain\deployment\render.com\**\.env
-
-# flyctl launch added from .venv\Lib\site-packages\litellm\proxy\.gitignore
-.venv\Lib\site-packages\litellm\proxy\**\.env
-.venv\Lib\site-packages\litellm\proxy\**\secrets.toml
+# IDE/editor folders
+.idea/
+.vscode/
 fly.toml
