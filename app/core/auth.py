@@ -4,15 +4,15 @@ from jose import jwt, JWTError
 import httpx
 from typing import Optional, Dict
 from pydantic import BaseModel
-from app.models.user import UserModel
-from app import crud
-from app.api import deps
+from dotenv import load_dotenv
 import os
+load_dotenv()
 class AuthInfo(BaseModel):
     auth_id: str
 
-JWKS_URL = os.getenv("JWKS_URL")
-
+JWKS_URL = os.getenv("JWKS_URL", "https://vital-joey-73.clerk.accounts.dev/.well-known/jwks.json") 
+print("JWKS_URL", JWKS_URL)
+print("CLERK_ISSUER_URL", os.getenv("CLERK_ISSUER_URL"))
 class JWTBearer(HTTPBearer):
     def __init__(self, auto_error: bool = True):
         super(JWTBearer, self).__init__(auto_error=auto_error)
