@@ -18,6 +18,7 @@ class UserModel(Model):
     name: str = Field(...)
     email: EmailStr = Field(unique=True)
     api_key: str = Field(...)
+    auth_id: str = Field(unique=True)  # Clerk auth ID
     selected_units: List[CourseInfoEmbededModel] = Field(default_factory=list)
     available_units: List[CourseInfoEmbededModel] = Field(default_factory=list)  # Direct CourseInfo from Ed API
     previous_units: List[CourseInfoEmbededModel] = Field(default_factory=list)
