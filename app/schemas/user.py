@@ -19,7 +19,12 @@ class UserBase(BaseBSONModel):
 class UserCreate(UserBase):
     """Schema for creating a new user"""
     api_key: str
+    auth_id: str
 
+
+class UserCreateReq(UserBase):
+    """Schema for creating a new user"""
+    api_key: str
 
 class UserUpdate(BaseBSONModel):
     """Schema for updating an existing user"""

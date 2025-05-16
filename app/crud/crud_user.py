@@ -35,11 +35,12 @@ class CRUDUser(CRUDBase[UserModel, UserCreate, UserUpdate]):
         Sync a user's units from Ed service to database.
         Updates unit statuses and maintains history.
         """
+        user = await self.get(db, {"auth_id": user_id})
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User not found")
         try:
             # Get the user
-            user = await self.get(db, {"id": ObjectId(user_id)})
-            if not user:
-                raise HTTPException(status_code=404, detail=f"User not found")
+           
 
             # Create Ed service with user's API key
             ed_service = EdService(user.api_key)
@@ -75,11 +76,11 @@ class CRUDUser(CRUDBase[UserModel, UserCreate, UserUpdate]):
         """
         Update user's selected units and update unit statuses accordingly
         """
-        print("selected_unit_ids", selected_unit_ids)
         try:
             user = await self.get(db, {"id": ObjectId(user_id)})
             if not user:
                 raise HTTPException(status_code=404, detail="User not found")
+
             # Get current selected units
             current_selected = set(unit_info.id for unit_info in user.selected_units)
             new_selected = set(selected_unit_ids)
@@ -89,61 +90,78 @@ class CRUDUser(CRUDBase[UserModel, UserCreate, UserUpdate]):
             # Units to be removed
             to_remove = current_selected - new_selected
 
-            updated_selected_units = [unit_info.model_dump() for unit_info in user.selected_units if unit_info.id not in to_remove]
-            print("updated_selected_units", updated_selected_units)
-            # if unit is not in the database, create it and set status to active otherwise update the status to active
+            # Start with existing units that aren't being removed
+            updated_selected_units = [
+                unit_info.model_dump() 
+                for unit_info in user.selected_units 
+                if unit_info.id not in to_remove
+            ]
+
+            # Handle units to be added
+            ed_service = EdService(user.api_key)
             for unit_id in to_add:
-                unit_obj = await unit.get(db, {"id": unit_id})
-                print("unit_obj", unit_obj)
-                if unit_obj:
-                    ## convert the course info to the course info embeded model
-                    updated_selected_units.append(unit_obj.model_dump())
-                    # await unit.update(
-                    #     db,
-                    #     db_obj=unit_obj,
-                    #     obj_in={"status": UnitStatus.ACTIVE}
-                    # )
-                else:
-                    ## create needs  the full course info
-                    ed_service = EdService(user.api_key)
-                    course_info = await ed_service.get_course_info(unit_id)
+                try:
+                    unit_obj = await unit.get(db, {"id": unit_id})
+                    if unit_obj:
+                        updated_selected_units.append(unit_obj.model_dump())
+                    else:
+                        # Get course info and create new unit
+                        course_info = await ed_service.get_course_info(unit_id)
+                        if course_info:
+                            # Convert datetime fields to ISO format strings
+                            if isinstance(course_info.created_at, datetime):
+                                course_info.created_at = course_info.created_at.isoformat()
+                            
+                            # Create unit
+                            new_unit = await unit.create(db, obj_in=course_info)
+                            
+                            # Add to selected units
+                            selected_unit = {
+                                "id": course_info.id,
+                                "name": course_info.name,
+                                "code": course_info.code,
+                                "year": str(course_info.year),
+                                "session": course_info.session,
+                                "status": course_info.status,
+                                "created_at": course_info.created_at,
+                            }
+                            updated_selected_units.append(selected_unit)
+                except Exception as e:
+                    print(f"Error processing unit {unit_id}: {str(e)}")
+                    continue
 
-                    # Convert datetime fields to ISO format strings
-                    course_info.created_at = course_info.created_at.isoformat() if type(course_info.created_at) == datetime else course_info.created_at                    
-                    # Create unit
-                    await unit.create(
-                        db,
-                        obj_in=course_info
-                    )
-                    
-                    # Convert to CourseInfoEmbededModel format
-                    selected_unit = {
-                        "id": course_info.id,
-                        "name": course_info.name,
-                        "code": course_info.code,
-                        "year": str(course_info.year),
-                        "session": course_info.session,
-                        "status": course_info.status,
-                        "created_at": course_info.created_at,
-                    }
-                    updated_selected_units.append(selected_unit)
-
-
+            # Handle units to be removed
             for unit_id in to_remove:
-                unit_obj = await unit.get(db, {"id": unit_id})
-                if unit_obj:
-                    await unit.update(
-                        db,
-                        db_obj=unit_obj,
-                        obj_in={"status": UnitStatus.PAST}
-                    )
+                try:
+                    unit_obj = await unit.get(db, {"id": unit_id})
+                    if unit_obj:
+                        await unit.update(
+                            db,
+                            db_obj=unit_obj,
+                            obj_in={"status": UnitStatus.PAST}
+                        )
+                except Exception as e:
+                    print(f"Error updating unit status for {unit_id}: {str(e)}")
+                    continue
 
+            # Update user with new selected units
             user.selected_units = updated_selected_units
-            print("user to be updated", user)
-            return await self.engine.save(user)
+            
+            # Save user changes
+            try:
+                updated_user = await self.engine.save(user)
+                return updated_user
+            except Exception as e:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to save user updates: {str(e)}"
+                )
 
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error updating selected units: {str(e)}"
+            )
 
 
 user = CRUDUser(UserModel)

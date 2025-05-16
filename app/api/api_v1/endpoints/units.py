@@ -10,16 +10,21 @@ from app.repositories.question_cluster_repository import QuestionClusterReposito
 from app.utils.shared import is_within_interval, parse_date
 from app.models.unit_dashboard import ThreadMetadata
 from app.repositories.task_transaction_repository import TaskTransactionRepository
+from app.core.auth import AuthInfo, get_current_user
+
 
 router = APIRouter()
 cluster_repo = QuestionClusterRepository()
 
 
 @router.get("/{unit_id}", response_model=UnitResponse)
-async def get_user_unit_detail(unit_id: str, db=Depends(deps.get_db)):
+async def get_user_unit_detail(unit_id: str, db=Depends(deps.get_db), auth_info: AuthInfo = Depends(get_current_user)):
     """
     Get user's unit detail
     """
+    if not await check_user_unit_access(unit_id, auth_info.auth_id, db):
+        raise HTTPException(status_code=403, detail="User does not have access to this unit")
+
     # Avoid double try-except by handling common errors directly
     unit = await crud.unit.get(db, {"id": int(unit_id)})
 
@@ -31,10 +36,12 @@ async def get_user_unit_detail(unit_id: str, db=Depends(deps.get_db)):
 
 
 @router.patch("/{unit_id}")
-async def update_unit(unit_id: int, unit_update: UpdateUnitRequest, db=Depends(deps.get_db)):
+async def update_unit(unit_id: int, unit_update: UpdateUnitRequest, db=Depends(deps.get_db), auth_info: AuthInfo = Depends(get_current_user)):
     """
     Update unit details
     """
+    if not await check_user_unit_access(unit_id, auth_info.auth_id, db):
+        raise HTTPException(status_code=403, detail="User does not have access to this unit")
     try:
         unit = await crud.unit.get(db, {"id": int(unit_id)})
         if not unit:
@@ -46,8 +53,10 @@ async def update_unit(unit_id: int, unit_update: UpdateUnitRequest, db=Depends(d
     
 
 @router.get("/{course_id}/unanswered-threads")
-async def get_unanswered_threads(user_id, course_id: int, db=Depends(deps.get_db)):
-    user = await crud.user.get(db, {"id": ObjectId(user_id)})
+async def get_unanswered_threads(course_id: int, db=Depends(deps.get_db), auth_info: AuthInfo = Depends(get_current_user)):
+    if not await check_user_unit_access(course_id, auth_info.auth_id, db):
+        raise HTTPException(status_code=403, detail="User does not have access to this unit")
+    user = await crud.user.get(db, {"auth_id": auth_info.auth_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     ed_service = await get_ed_service(user.api_key)
@@ -58,13 +67,15 @@ async def get_unanswered_threads(user_id, course_id: int, db=Depends(deps.get_db
 @router.post("/{unit_id}/sync-threads")
 async def sync_unit_threads(
     unit_id: str,
-    user_id: str,
+    auth_info: AuthInfo = Depends(get_current_user),
     db=Depends(deps.get_db)
 ):
     """
     Sync all threads from Ed service to local database for a specific unit
     Filters out social categories and handles duplicates
     """
+    if not await check_user_unit_access(unit_id, auth_info.auth_id, db):
+        raise HTTPException(status_code=403, detail="User does not have access to this unit")
     try:
         # Get unit
         unit = await crud.unit.get(db, {"id": int(unit_id)})
@@ -72,7 +83,7 @@ async def sync_unit_threads(
             raise HTTPException(status_code=404, detail=f"Unit with ID {unit_id} not found")
 
         # Get user's Ed service
-        user = await crud.user.get(db, {"id": ObjectId(user_id)})
+        user = await crud.user.get(db, {"auth_id": auth_info.auth_id})
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
@@ -189,6 +200,7 @@ async def sync_unit_threads(
 @router.get("/{unit_id}/threads")
 async def get_unit_threads(
     unit_id: str,
+    auth_info: AuthInfo = Depends(get_current_user),
     start_date: str = None,
     end_date: str = None,
     page: int = Query(1, ge=1),
@@ -200,6 +212,9 @@ async def get_unit_threads(
     """
     Get all threads for a unit with pagination and filtering
     """
+
+    if not await check_user_unit_access(unit_id, auth_info.auth_id, db):
+        raise HTTPException(status_code=403, detail="User does not have access to this unit")
     try:
         # Get unit
         unit = await crud.unit.get(db, {"id": int(unit_id)})
@@ -254,13 +269,16 @@ async def get_unit_threads(
 @router.get("/{unit_id}/weeks")
 async def get_unit_weeks(
     unit_id: str,
-    db=Depends(deps.get_db)
+    db=Depends(deps.get_db),
+    auth_info: AuthInfo = Depends(get_current_user)
 ):
     """
     Get weeks data for a unit with updated thread counts.
     Thread counts are updated for the current week only.
     Returns weeks data matching WeekConfig interface and transaction data.
     """
+    if not await check_user_unit_access(unit_id, auth_info.auth_id, db):
+        raise HTTPException(status_code=403, detail="User does not have access to this unit")
     try:
         # Get unit
         unit = await crud.unit.get(db, {"id": int(unit_id)})
@@ -300,3 +318,10 @@ async def get_unit_weeks(
 
 
 
+async def check_user_unit_access(unit_id: str, auth_id: str, db=Depends(deps.get_db))->bool:
+    user = await crud.user.get(db, {"auth_id": auth_id})
+    print("user", user)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return list(filter(lambda x: x.id == int(unit_id), user.available_units)) or list(filter(lambda x: x.id == int(unit_id), user.selected_units))
