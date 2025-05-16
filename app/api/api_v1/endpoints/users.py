@@ -18,7 +18,7 @@ async def get_current_user_info(
     Get current user information including selected, available, and previous units
     """
     print("auth_info", auth_info)
-    user = await crud.user.get(db, {"auth_id": auth_info.auth_id})
+    user =await crud.user.sync_user_units(db, auth_info.auth_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
@@ -72,7 +72,8 @@ async def update_user_settings(
             
         # Update user
         updated_user = await crud.user.update(db, db_obj=user, obj_in=user_update)
-        return UserResponse.from_model(updated_user)
+        user_synced = await crud.user.sync_user_units(db, auth_info.auth_id)
+        return UserResponse.from_model(user_synced)
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from app.tasks.fetch_insert_to_vector_db_tasks import fetch_and_store_threads, fetch_and_store_threads_by_unit
 from app.tasks.thread_clustering_tasks import cluster_unit_documents
 from app.tasks.agents_tasks import run_faq_agent_analysis
@@ -7,7 +7,10 @@ from celery.result import AsyncResult
 from celery_worker import app as celery_app
 from app.repositories.task_transaction_repository import TaskTransactionRepository
 from app.schemas.tasks.requets import RunTaskRequest
-
+from app.core.auth import AuthInfo, get_current_user
+from app.api.api_v1.endpoints.units import check_user_unit_access
+from app.api import deps
+from app import crud
 router = APIRouter()
 
 
@@ -42,11 +45,13 @@ async def trigger_agent_analysis_task(unit_id: str, cluster_id: str):
 
 
 @router.post("/run_chain/")
-async def run_chain_task(request: RunTaskRequest):
+async def run_chain_task(request: RunTaskRequest, auth_info: AuthInfo = Depends(get_current_user), db=Depends(deps.get_db)):
     """
     Run a chain of Celery tasks to fetch, cluster, and analyze threads.
     to do validation and error handling
     """
+    if not await check_user_unit_access(request.unitId, auth_info.auth_id, db):
+        raise HTTPException(status_code=403, detail="User does not have access to this unit")
     repo = TaskTransactionRepository()
     transcation_record = await repo.create_task(task_name=f"generating faq report",
                                                 user_id=request.userId,

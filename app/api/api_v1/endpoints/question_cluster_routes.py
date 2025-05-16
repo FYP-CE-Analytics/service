@@ -8,6 +8,8 @@ from app.core.config import settings
 from app.api import deps
 from odmantic import AIOEngine
 from app import crud
+from app.core.auth import AuthInfo, get_current_user
+from app.api.api_v1.endpoints.units import check_user_unit_access
 
 router = APIRouter()
 cluster_repo = QuestionClusterRepository()
@@ -19,12 +21,15 @@ async def get_unit_clusters(
     unit_id: str,
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
+    auth_info: AuthInfo = Depends(get_current_user),
     db: AIOEngine = Depends(deps.get_db)
 ):
     """
     Get all question clusters for a specific unit with pagination.
     Includes thread content from unit.threads and handles threads that belong to multiple themes.
     """
+    if not await check_user_unit_access(unit_id, auth_info.auth_id, db):
+        raise HTTPException(status_code=403, detail="User does not have access to this unit")
     # Get the unit to access thread content
     unit = await crud.unit.get(db, {"id": int(unit_id)})
     if not unit:

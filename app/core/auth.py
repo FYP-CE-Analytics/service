@@ -7,11 +7,11 @@ from pydantic import BaseModel
 from app.models.user import UserModel
 from app import crud
 from app.api import deps
-
+import os
 class AuthInfo(BaseModel):
     auth_id: str
 
-JWKS_URL = "https://vital-joey-73.clerk.accounts.dev/.well-known/jwks.json"
+JWKS_URL = os.getenv("JWKS_URL")
 
 class JWTBearer(HTTPBearer):
     def __init__(self, auto_error: bool = True):
@@ -53,6 +53,7 @@ class JWTBearer(HTTPBearer):
                     break
             
             if not key:
+                print("key not found")
                 return False
 
             # Verify the token
@@ -61,11 +62,12 @@ class JWTBearer(HTTPBearer):
                 key,
                 algorithms=['RS256'],
                 audience='vital-joey-73',
-                issuer='https://vital-joey-73.clerk.accounts.dev'
+                issuer=os.getenv("CLERK_ISSUER_URL")
             )
-            
+            print("payload", payload)
             return True
-        except JWTError:
+        except JWTError as e:
+            print("JWTError", e)
             return False
 
 async def get_current_user(
