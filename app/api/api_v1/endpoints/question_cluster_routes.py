@@ -66,7 +66,12 @@ async def get_unit_clusters(
             "weekEnd": cluster.weekEnd,
             "unitId": cluster.unit_id,
             "transactionIds": cluster.transaction_ids,
-            "metadata": cluster.metadata
+            "metadata": cluster.metadata,
+            "weekConfig": {
+                "weekId": next((week.week_id for week in unit.weeks if week.start_date.strftime("%Y-%m-%d") == cluster.weekStart), None),
+                "weekNumber": next((week.teaching_week_number for week in unit.weeks if week.start_date.strftime("%Y-%m-%d") == cluster.weekStart), None),
+                "weekType": next((week.week_type for week in unit.weeks if week.start_date.strftime("%Y-%m-%d") == cluster.weekStart), None)
+            }
         })
 
     # Implement pagination

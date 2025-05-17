@@ -4,17 +4,20 @@ from datetime import date, datetime
 from app.models import UnitModel
 
 
-class WeekConfig(BaseModel):
+class WeekDetails(BaseModel):
     """
     Schema for week configuration
     """
-    week_number: int = Field(...,
-                             description="Week number in the unit", alias="weekNumber")
-    start_date: datetime = Field(...,
-                                 description="Start date of the week", alias="startDate")
-    end_date: datetime = Field(...,
-                               description="End date of the week", alias="endDate")
+    week_id: int = Field(..., description="Week number in the unit", alias="weekId")
+    teaching_week_number: int = Field(..., description="Teaching week number in the unit", alias="teachingWeekNumber")
+    week_type: str = Field(..., description="Week type in the unit", alias="weekType")
+    start_date: datetime = Field(..., description="Start date of the week", alias="startDate")
+    end_date: datetime = Field(..., description="End date of the week", alias="endDate")
     content: str = Field(default="", description="Content for this week")
+
+    class Config:
+        populate_by_name = True
+        allow_population_by_field_name = True
 
 
 class UnitCreate(BaseModel):
@@ -33,7 +36,7 @@ class UnitCreate(BaseModel):
         None, description="Creation date of the unit")
     updated_at: Optional[str] = Field(
         None, description="Last update date of the unit")
-    weeks: List[WeekConfig] = Field(
+    weeks: List[WeekDetails] = Field(
         default_factory=list, description="Week configurations")
 
 
@@ -45,7 +48,7 @@ class UpdateUnitRequest(BaseModel):
         None, description="New description for the unit")
     content: Optional[str] = Field(
         None, description="New content for the unit")
-    weeks: Optional[List[WeekConfig]] = Field(
+    weeks: Optional[List[WeekDetails]] = Field(
         None, description="Week configurations", alias="weeks")
 
 
@@ -61,7 +64,7 @@ class UnitResponse(BaseModel):
     content: str = Field(default="", description="Content of the unit")
     year: int = Field(..., description="Academic year")
     session: str = Field(..., description="Academic session")
-    weeks: List[dict] = Field(
+    weeks: List[WeekDetails] = Field(
         default_factory=list, description="Week configurations")
 
     @classmethod
@@ -69,8 +72,7 @@ class UnitResponse(BaseModel):
         """Convert UserModel to UserResponse schema"""
         return cls(
             **unit.model_dump(exclude={"weeks"}),
-            weeks=[{
-                "weekNumber": week.week_number, "startDate": week.start_date, "endDate": week.end_date, "content": week.content} for week in unit.weeks]
+            weeks=[WeekDetails.model_validate(week.model_dump()) for week in unit.weeks]
         )
 
 

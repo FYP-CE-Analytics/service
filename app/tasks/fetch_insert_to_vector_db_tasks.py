@@ -134,14 +134,15 @@ def fetch_and_store_threads_by_unit(user_id: str, unit_id: str, transaction_id: 
     for thread in threads:
         thread_content = f"Title: {thread.title}\nContent: {thread.document}"
         # find the week number from the weeks list
-        week_number = next((week['week_number'] for week in weeks if is_within_interval(thread.created_at, week.get("start_date"), week.get("end_date"))), None)
+        week = next((week for week in weeks if is_within_interval(thread.created_at, week.get("start_date"), week.get("end_date"))), None)
         documents.append({
             "id": str(thread.id),
             "category": thread.subcategory if thread.subcategory else thread.category,
             "content": thread_content,
             "created_at": str(thread.created_at),
-            "week_number": week_number
-
+            "week_id": week['week_id'] if week else None,
+            "week_number": week['teaching_week_number'] if week else None,
+            "week_type": week['week_type'] if week else None
         })
 
     # Insert into vector DB

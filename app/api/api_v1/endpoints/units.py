@@ -296,7 +296,9 @@ async def get_unit_weeks(
         for week in unit.weeks:
             # Format week data according to WeekConfig interface
             week_data = {
-                "weekNumber": week.week_number,
+                "weekId": week.week_id,
+                "teachingWeekNumber": week.teaching_week_number,
+                "weekType": week.week_type,
                 "startDate": week.start_date,
                 "endDate": week.end_date,
                 "content": week.content,

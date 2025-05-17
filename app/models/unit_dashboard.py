@@ -16,11 +16,14 @@ class UnitWeeks(EmbeddedModel):
     """
     Model representing the weeks of a unit.
     """
-    week_number: int = Field(default=1)
+    week_id: int = Field(default=1)
+    teaching_week_number: int = Field(default=1)
     start_date: datetime = Field(default_factory=datetime.now)
     end_date: datetime = Field(default_factory=datetime.now)
     content: str = Field(default="")
     thread_count: int = Field(default=0)
+    week_type: str = Field(default="teaching")  # Can be "teaching", "break", "exam", etc.
+
 
 
 class ThreadMetadata(EmbeddedModel):

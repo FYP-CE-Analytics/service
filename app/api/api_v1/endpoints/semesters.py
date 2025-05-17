@@ -41,9 +41,9 @@ async def list_semesters(db=Depends(deps.get_db)):
                     "year": 2025,
                     "semester": 1,
                     "phases": [
-                        SemesterPhase(type=SemesterPhaseType.TEACHING_PERIOD, start_date=datetime(2025, 3, 3), end_date=datetime(2025, 6, 27)),
-                        SemesterPhase(type=SemesterPhaseType.MIDSEM_BREAK, start_date=datetime(2025, 4, 21), end_date=datetime(2025, 4, 25)),
-                        SemesterPhase(type=SemesterPhaseType.SWOT_VAC, start_date=datetime(2025, 6, 2), end_date=datetime(2025, 6, 6)),
+                        SemesterPhase(type=SemesterPhaseType.TEACHING_PERIOD, start_date=datetime(2025, 3, 3), end_date=datetime(2025, 6, 1)),
+                        SemesterPhase(type=SemesterPhaseType.MIDSEM_BREAK, start_date=datetime(2025, 4, 21), end_date=datetime(2025, 4, 27)),
+                        SemesterPhase(type=SemesterPhaseType.SWOT_VAC, start_date=datetime(2025, 6, 2), end_date=datetime(2025, 6, 8)),
                         SemesterPhase(type=SemesterPhaseType.FINAL_ASSESSMENTS, start_date=datetime(2025, 6, 9), end_date=datetime(2025, 6, 27))
                     ]
                 },
@@ -52,9 +52,9 @@ async def list_semesters(db=Depends(deps.get_db)):
                     "year": 2025,
                     "semester": 2,
                     "phases": [
-                        SemesterPhase(type=SemesterPhaseType.TEACHING_PERIOD, start_date=datetime(2025, 7, 28), end_date=datetime(2025, 11, 19)),
-                        SemesterPhase(type=SemesterPhaseType.MIDSEM_BREAK, start_date=datetime(2025, 9, 29), end_date=datetime(2025, 10, 3)),
-                        SemesterPhase(type=SemesterPhaseType.SWOT_VAC, start_date=datetime(2025, 10, 27), end_date=datetime(2025, 10, 31)),
+                        SemesterPhase(type=SemesterPhaseType.TEACHING_PERIOD, start_date=datetime(2025, 7, 28), end_date=datetime(2025, 10, 26)),
+                        SemesterPhase(type=SemesterPhaseType.MIDSEM_BREAK, start_date=datetime(2025, 9, 29), end_date=datetime(2025, 10, 5)),
+                        SemesterPhase(type=SemesterPhaseType.SWOT_VAC, start_date=datetime(2025, 10, 27), end_date=datetime(2025, 11, 2)),
                         SemesterPhase(type=SemesterPhaseType.FINAL_ASSESSMENTS, start_date=datetime(2025, 11, 3), end_date=datetime(2025, 11, 19))
                     ]
                 },
@@ -63,9 +63,10 @@ async def list_semesters(db=Depends(deps.get_db)):
                     "year": 2026,
                     "semester": 1,
                     "phases": [
-                        SemesterPhase(type=SemesterPhaseType.TEACHING_PERIOD, start_date=datetime(2026, 3, 2), end_date=datetime(2026, 6, 26)),
-                        SemesterPhase(type=SemesterPhaseType.MIDSEM_BREAK, start_date=datetime(2026, 4, 6), end_date=datetime(2026, 4, 10)),
-                        SemesterPhase(type=SemesterPhaseType.SWOT_VAC, start_date=datetime(2026, 6, 1), end_date=datetime(2026, 6, 5)),
+                        
+                        SemesterPhase(type=SemesterPhaseType.TEACHING_PERIOD, start_date=datetime(2026, 3, 2), end_date=datetime(2026, 5,31 )),#TEACHING PERIODS  finish before swot vac
+                        SemesterPhase(type=SemesterPhaseType.MIDSEM_BREAK, start_date=datetime(2026, 4, 6), end_date=datetime(2026, 4, 12)),
+                        SemesterPhase(type=SemesterPhaseType.SWOT_VAC, start_date=datetime(2026, 6, 1), end_date=datetime(2026, 6, 7)),
                         SemesterPhase(type=SemesterPhaseType.FINAL_ASSESSMENTS, start_date=datetime(2026, 6, 8), end_date=datetime(2026, 6, 26))
                     ]
                 },
@@ -74,9 +75,9 @@ async def list_semesters(db=Depends(deps.get_db)):
                     "year": 2026,
                     "semester": 2,
                     "phases": [
-                        SemesterPhase(type=SemesterPhaseType.TEACHING_PERIOD, start_date=datetime(2026, 7, 27), end_date=datetime(2026, 11, 20)),
-                        SemesterPhase(type=SemesterPhaseType.MIDSEM_BREAK, start_date=datetime(2026, 9, 28), end_date=datetime(2026, 10, 2)),
-                        SemesterPhase(type=SemesterPhaseType.SWOT_VAC, start_date=datetime(2026, 10, 26), end_date=datetime(2026, 10, 30)),
+                        SemesterPhase(type=SemesterPhaseType.TEACHING_PERIOD, start_date=datetime(2026, 7, 27), end_date=datetime(2026, 10, 25)),
+                        SemesterPhase(type=SemesterPhaseType.MIDSEM_BREAK, start_date=datetime(2026, 9, 28), end_date=datetime(2026, 10, 4)),
+                        SemesterPhase(type=SemesterPhaseType.SWOT_VAC, start_date=datetime(2026, 10, 26), end_date=datetime(2026, 11, 1)),
                         SemesterPhase(type=SemesterPhaseType.FINAL_ASSESSMENTS, start_date=datetime(2026, 11, 2), end_date=datetime(2026, 11, 20))
                     ]
                 },
@@ -85,9 +86,9 @@ async def list_semesters(db=Depends(deps.get_db)):
                     "year": 2027,
                     "semester": 1,
                     "phases": [
-                        SemesterPhase(type=SemesterPhaseType.TEACHING_PERIOD, start_date=datetime(2027, 3, 1), end_date=datetime(2027, 6, 25)),
-                        SemesterPhase(type=SemesterPhaseType.MIDSEM_BREAK, start_date=datetime(2027, 3, 29), end_date=datetime(2027, 4, 2)),
-                        SemesterPhase(type=SemesterPhaseType.SWOT_VAC, start_date=datetime(2027, 5, 31), end_date=datetime(2027, 6, 4)),
+                        SemesterPhase(type=SemesterPhaseType.TEACHING_PERIOD, start_date=datetime(2027, 3, 1), end_date=datetime(2027, 5, 30)),
+                        SemesterPhase(type=SemesterPhaseType.MIDSEM_BREAK, start_date=datetime(2027, 3, 29), end_date=datetime(2027, 4, 4)),
+                        SemesterPhase(type=SemesterPhaseType.SWOT_VAC, start_date=datetime(2027, 5, 31), end_date=datetime(2027, 6, 6)),
                         SemesterPhase(type=SemesterPhaseType.FINAL_ASSESSMENTS, start_date=datetime(2027, 6, 7), end_date=datetime(2027, 6, 25))
                     ]
                 },
@@ -96,9 +97,9 @@ async def list_semesters(db=Depends(deps.get_db)):
                     "year": 2027,
                     "semester": 2,
                     "phases": [
-                        SemesterPhase(type=SemesterPhaseType.TEACHING_PERIOD, start_date=datetime(2027, 7, 26), end_date=datetime(2027, 11, 19)),
-                        SemesterPhase(type=SemesterPhaseType.MIDSEM_BREAK, start_date=datetime(2027, 9, 27), end_date=datetime(2027, 10, 1)),
-                        SemesterPhase(type=SemesterPhaseType.SWOT_VAC, start_date=datetime(2027, 10, 25), end_date=datetime(2027, 10, 29)),
+                        SemesterPhase(type=SemesterPhaseType.TEACHING_PERIOD, start_date=datetime(2027, 7, 26), end_date=datetime(2027, 10, 24)),
+                        SemesterPhase(type=SemesterPhaseType.MIDSEM_BREAK, start_date=datetime(2027, 9, 27), end_date=datetime(2027, 10, 3)),
+                        SemesterPhase(type=SemesterPhaseType.SWOT_VAC, start_date=datetime(2027, 10, 25), end_date=datetime(2027, 11, 1)),
                         SemesterPhase(type=SemesterPhaseType.FINAL_ASSESSMENTS, start_date=datetime(2027, 11, 1), end_date=datetime(2027, 11, 19))
                     ]
                 }

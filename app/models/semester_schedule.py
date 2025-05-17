@@ -21,8 +21,8 @@ class SemesterPhase(EmbeddedModel):
     Represents a specific phase within a semester (e.g., teaching period, mid-semester break).
     """
     type: SemesterPhaseType = Field(...)
-    start_date: datetime = Field(...)
-    end_date: datetime = Field(...)
+    start_date: datetime = Field(..., description="Start date of the phase")
+    end_date: datetime = Field(..., description="End date of the phase")
 
 
 class SemesterModel(Model):
