@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
-from app.tasks.fetch_insert_to_vector_db_tasks import fetch_and_store_threads, fetch_and_store_threads_by_unit
+from app.tasks.fetch_insert_to_vector_db_tasks import fetch_and_store_threads, fetch_and_store_threads_by_unit, fetch_and_store_threads_by_unit_by_category
 from app.tasks.thread_clustering_tasks import cluster_unit_documents
-from app.tasks.agents_tasks import run_faq_agent_analysis
+from app.tasks.agents_tasks import run_faq_agent_analysis, run_unit_trend_analysis
 from celery import chain
 from celery.result import AsyncResult
 from celery_worker import app as celery_app
@@ -14,34 +14,6 @@ from app import crud
 router = APIRouter()
 
 
-@router.post("/insert")
-async def trigger_vector_insertion_task():
-    """
-    Trigger the Celery task to fetch and store threads in the vector database.
-    """
-    # Call the Celery task
-    result = fetch_and_store_threads.delay()
-    return {"task_id": result.id, "status": result.status}
-
-
-@router.post("/cluster/{unit_id}")
-async def trigger_clustering_task(unit_id: str):
-    """
-    Trigger the Celery task to fetch and store threads in the vector database.
-    """
-    # Call the Celery task
-
-    res = cluster_unit_documents.delay(unit_id)
-    return {"task_id": res.id, "status": res.status}
-
-
-@router.post("/run_agent_analysis")
-async def trigger_agent_analysis_task(unit_id: str, cluster_id: str):
-    """
-    Trigger the Celery task to run agent analysis on clustered questions.
-    """
-    # Call the Celery task
-    res = run_faq_agent_analysis.delay(unit_id, cluster_id)
 
 
 @router.post("/run_chain/")
@@ -70,6 +42,35 @@ async def run_chain_task(request: RunTaskRequest, auth_info: AuthInfo = Depends(
 
     return {"transactionId": str(transcation_record.id), "status": result.status, "progress": 0}
 
+
+@router.post("/run_unit_trend_analysis/")
+async def trigger_unit_trend_analysis_task(request: RunTaskRequest, db=Depends(deps.get_db)):
+    """
+    Trigger the Celery task to run unit trend analysis on clustered questions.
+    """
+    # if not await check_user_unit_access(request.unitId, auth_info.auth_id, db):
+        # raise HTTPException(status_code=403, detail="User does not have access to this unit")
+    repo = TaskTransactionRepository()
+    transcation_record = await repo.create_task(task_name=request.category,
+                                                user_id=request.userId,
+                                                unit_id=request.unitId,
+                                                input=request.model_dump())
+    
+    task_chain = chain(fetch_and_store_threads_by_unit_by_category.s(unit_id=request.unitId, user_id=request.userId, transaction_id=str(transcation_record.id), category=request.category),
+                       cluster_unit_documents.s(request.unitId),
+                       run_unit_trend_analysis.s(request.unitId, request.category))
+    result = task_chain.apply_async()
+    return {"transactionId": str(transcation_record.id), "status": result.status, "progress": 0}
+
+
+@router.get("/unit_trend_analysis_report/{unit_id}/{category}")
+async def get_unit_trend_analysis_report(unit_id: str, category: str, db=Depends(deps.get_db)):
+    """
+    Get the unit trend analysis report.
+    """
+    repo = TaskTransactionRepository()
+    task_status = await repo.get_task_result_by_unit_id_and_name(unit_id, category)
+    return task_status
 
 @router.get("/status/{transaction_id}")
 async def get_transaction_status(transaction_id: str):

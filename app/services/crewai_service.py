@@ -5,7 +5,7 @@ from crewai import Agent, Task, Crew, Process, LLM
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 from app.schemas.vector_store import VectorSearchResponse
-from app.schemas.crewai_faq_service_schema import CrewAIFAQInputSchema, CrewAIFAQOutputSchema, CrewAIThemeOutputSchema, CrewAIFAQRunOutputSchema
+from app.schemas.crewai_faq_service_schema import CrewAIFAQInputSchema, CrewAIFAQOutputSchema, CrewAIThemeOutputSchema, CrewAIFAQRunOutputSchema, CrewAIUnitTrendAnalysisInputSchema, CrewAIUnitTrendAnalysisOutputSchema
 from app.services.pinecone_vector_store import PineconeVectorStore
 from app.utils.shared import parse_date
 
@@ -27,9 +27,9 @@ class QuestionVectorSearchTool(BaseTool):
     vectorstore: Any = None
     collection_name: str = ""
     threshold: float = 0.1
-    week_number: int = 0
+    filter: dict = None
 
-    def __init__(self,  index_name: str, collection_name: str, week_number: int, threshold=0.1, **kwargs):
+    def __init__(self,  index_name: str, collection_name: str, threshold=0.1, filter:dict=None, **kwargs):
         super().__init__(**kwargs)
         try:
             api_key = os.getenv("PINECONE_API_KEY")
@@ -44,7 +44,7 @@ class QuestionVectorSearchTool(BaseTool):
             )
             self.collection_name = collection_name
             self.threshold = threshold
-            self.week_number = week_number
+            self.filter = filter
             print(
                 f"Vector store initialized for collection: {collection_name}")
         except Exception as e:
@@ -60,7 +60,7 @@ class QuestionVectorSearchTool(BaseTool):
 
         try:
             results = self.vectorstore.search_with_string(
-                query_string=query_string, collection_name=self.collection_name, week_number=self.week_number)
+                query_string=query_string, collection_name=self.collection_name, filter=self.filter)
             if not results:
                 return [{"resukt": "No related questions found."}]
             # if results:
@@ -94,6 +94,9 @@ class UnitFAQCrewService:
             index_name=self.index_name,
             collection_name=collection_name,
             week_number=week_number,
+            filter={"week_id": {
+                "$eq": week_number
+            }},
             **kwargs
         )
         # self.file_writer_tool = FileWriterTool()
@@ -228,24 +231,25 @@ class UnitTrendAnalysisCrewService:
         self.theme_extractor_task = None
         self.report_writer_task = None
 
-    def _initialize_tools(self, collection_name: str, start_date, end_date) -> None:
+    def _initialize_tools(self, collection_name: str, category:str) -> None:
         """Initializes tools that depend on the unit (collection_name)."""
         print(f"Initializing tools for collection: {collection_name}")
         self.rag_tool = QuestionVectorSearchTool(
             index_name=self.index_name,
             collection_name=collection_name,
-            start_date=start_date,
-            end_date=end_date,
+            filter={"category": {
+                "$eq": category
+            }}
 
         )
 
-    def setup_crew(self, unit_id: str, start_date, end_date) -> Crew:
+    def setup_crew(self, unit_id: str, category:str) -> Crew:
         """Sets up the Crew for a specific unit."""
-        self._initialize_tools(unit_id, start_date, end_date)
+        self._initialize_tools(unit_id, category)
 
         # Define Agents
         themeExtractorAgent = Agent(
-            role="You are a high education university tutor for {unit_name}. Your goal is to help identify common questions.",
+            role="You are a high education university tutor for {unit_name} teaching about {content}. Your goal is to help identify common questions.",
             goal="Extract the common theme of the questions students asked on the forum. This will then be used to help resolve their issues, including creating an FAQ or making modifications to assessment specifications.", 
             backstory="You are a university tutor skilled at identifying recurring themes in student questions. Your task is to pinpoint these themes and understand the underlying points of confusion that need addressing.",
             verbose=True,
@@ -255,8 +259,8 @@ class UnitTrendAnalysisCrewService:
         )
         
         reportWriterAgent = Agent(
-            role="You are the chief lecturer at a university for {unit_name}. Your goal is to synthesize analysis findings for the teaching team.",
-            goal="Synthesize all findings (themes, related questions, assessment links, FAQ draft) into a summary report. Highlight trends, potential blockers, and areas needing attention for unit improvement.",
+            role="You are the chief lecturer at a university for {unit_name} teaching about {content}. Your goal is to synthesize analysis findings for the teaching team.",
+            goal="Synthesize all findings into a summary report. Highlight common struggles, trends,potential common misconceptions and confusion among students, and areas needing attention for unit improvement.",
             backstory="Dedicated to weekly unit improvement, you create insightful executive summaries for the teaching team, focusing on actionable insights derived from student question data.",
             verbose=True,
             allow_delegation=False,
@@ -266,40 +270,49 @@ class UnitTrendAnalysisCrewService:
 
         self.theme_extractor_task = Task(
             description=(
-                "Analyze the list of top questions provided: {questions} on the given weeks {weeks} "
+                "Analyze the list of top questions provided: {questions} on the given assessment category {category} "
                 "For each question, use the vector search tool with the question's content as the query to find the top 3 semantically similar questions from the forum knowledge base. "
                 "Group related questions together based on similarity and content. "
                 "Identify the common underlying theme or point of confusion for each group. "
-                "Focus on themes relevant to the unit: {unit_name} with the weekly contain {weekly_content}"
-                "There could be other unrelated questions such as admin or technical issues, please provide a list of those questions separately. "
             ),
             expected_output=(
                 "A list of identified themes. Each theme should include: \n"
                 "- A concise title for the theme (e.g., 'Confusion about Assignment 1 Submission Format').\n"
                 "- A brief summary of the core issue or question the theme represents.\n"
                 "- A list of the initial question IDs and the similar question IDs/content retrieved from the vector search that support this theme. E.g. theme: 'Confusion about Assignment 1 Submission Format' \n"
-                "  - Question IDs: [123, 456]\n"
             ),
             agent=themeExtractorAgent
         )
         self.report_writer_task = Task(
             description=(
-                "Compile a summary report for the teaching team based on this week's analysis(start date {start_date} to end date {end_date} at week {weeks}). Include the following sections:\n"
-                "1.  **Overview:** Briefly state the period analyzed and the number of questions processed.\n"
-                "2.  **Major Themes:** List the key themes identified by the Theme Extractor, perhaps noting their frequency or the number of related questions found.\n"
-                "3.  **Assessment Links:** Briefly mention if/how the themes relate to specific assessments or unit content (using {assessment} and Unit overall{content} weekly contain where the questions was asked {weekly_content} context).\n"
-                "4   **Admin or Technical Issues:** List any unrelated questions or issues that were identified"
-                "5.  **Potential Blockers:** Highlight any significant misconceptions or difficulties indicated by the themes.\n"
-                "6.  **Draft FAQ:** Include the generated FAQ questions from the FAQ Writer.\n"
+                "Compile a summary report for the teaching team based on the questions found on the assessment category {category}. Include the following sections:\n"
+                "1.  **Overview:** Highlight the general trends discovered(are student more confused about the content, or more confused about the assessment format, or more confused about the submission format, etc.)\n"
+                "2.  **Major Themes within the questions:** List the key themes identified by the Theme Extractor, perhaps noting their frequency or the number of related questions found.\n"
+                "3.  **Potential Misconception and stuggles:** Highlight any significant misconceptions or difficulties student face on the {category} indicated by the themes.\n"
+                "4.  **Recommendations:** Provide recommendations for the teaching team to address the potential blockers and improve the unit."
+
                 "Structure the report for clarity and easy digestion by educators"
             ),
             expected_output=(
-                "A well-structured weekly report document summarizing student question trends, analysis, and the generated FAQ draft."
+                "A well-structured report document summarizing student question trends, analysis, and the generated recommendations."
+                "The report should be in well structured markdown format. for example: \n"
+                "Make sure the my heading like overview, major themes, student common misconceptions, recommendations are present in the report and clearly separated. Make sure the analysis is in new lines and not just one line."
+                "# Overview\n"
+                "Analysis for {category} on {unit_name}\n"
+                "## Major Themes\n"
+                "- [theme1]\n"
+                "- [theme2]\n"
+                "# Student Common Misconceptions\n"
+                "- [misconception1]\n"
+                "- [misconception2]\n"
+                "# Recommendations\n"
+                "- [recommendation1]\n"
+                "- [recommendation2]\n"
             ),
             agent=reportWriterAgent,
             # Depends on both previous tasks
-            context=[self.themeExtractorTask],
-            output_pydantic=CrewAIFAQOutputSchema,
+            context=[self.theme_extractor_task],
+            output_pydantic=CrewAIUnitTrendAnalysisOutputSchema,
         )
         # Create and return the Crew
         crew = Crew(
@@ -311,7 +324,7 @@ class UnitTrendAnalysisCrewService:
         )
         return crew
     
-    def run(self, inputs: CrewAIFAQInputSchema) -> CrewAIFAQRunOutputSchema:
+    def run(self, inputs: CrewAIUnitTrendAnalysisInputSchema) -> CrewAIUnitTrendAnalysisOutputSchema:
         """Runs the Crew with the given inputs."""
         unit_id = inputs.unit_id
         unit_name = inputs.unit_name
@@ -320,7 +333,7 @@ class UnitTrendAnalysisCrewService:
                 "unit_id and unit_name must be provided in inputs")     
         
         crew = self.setup_crew(
-            unit_id, start_date=inputs.start_date, end_date=inputs.end_date)
+            unit_id, category=inputs.category)
         # Prepare inputs specifically for kickoff, ensuring keys match task expectations
 
         print(f"Running crew with inputs: {inputs.model_dump()}")

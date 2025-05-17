@@ -28,15 +28,11 @@ class PineconeVectorStore(VectorStoreBase):
             )
         self.index = self.pc_service.Index(self.index_name)
 
-    def search_with_string(self, query_string, collection_name, week_id=None, top_k=3, threshold=0, **kwargs):
-        if week_id is not None:
+    def search_with_string(self, query_string, collection_name, filter:dict=None, top_k=3, threshold=0, **kwargs):
+        if filter is not None:
             response = self.index.search(namespace=collection_name, query={
                 "inputs": {"text": query_string},
-                "filter": { 
-                "week_id": {
-                    "$eq": week_id
-                }
-            },
+                "filter": filter,
             "top_k": top_k,
         })
         else:

@@ -15,6 +15,7 @@ class VectorStoreBase(ABC):
         collection_name: str,
         top_k: int = 3,
         threshold: Optional[float] = None,
+        filter: Optional[dict] = None,
         **kwargs: Any
     ) -> VectorSearchResponse:
         """

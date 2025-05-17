@@ -2,7 +2,7 @@ from typing import Dict, List, Any, Optional
 from celery_worker import app
 from app.services.crewai_service import UnitFAQCrewService, UnitTrendAnalysisCrewService    
 from app.const import VECTOR_INDEX_NAME
-from app.schemas.crewai_faq_service_schema import CrewAIFAQInputSchema
+from app.schemas.crewai_faq_service_schema import CrewAIFAQInputSchema, CrewAIUnitTrendAnalysisInputSchema
 from app.schemas.tasks.cluster_schema import ClusterTaskResult, CoreDocument
 from app.repositories.task_transaction_repository import TaskTransactionRepository
 from pymongo import MongoClient
@@ -20,7 +20,7 @@ db = client[os.getenv('DB_NAME', 'ed_summarizer')]
 task_repo = TaskTransactionRepository()
 
 
-@app.task(bind=True, name="run_agent_analysis")
+@app.task(bind=True, name="run_faq_agent_analysis")
 def run_faq_agent_analysis(self, clustering_result: dict = None, start_date=None, end_date=None, cluster_id: str = None, unit_id: str = None) -> Dict[str, Any]:
     """
     Celery task to run agent analysis on clustered questions.
@@ -82,7 +82,7 @@ def run_faq_agent_analysis(self, clustering_result: dict = None, start_date=None
     # assign the weeks list from the document
     weeks = unit_data.get("weeks", [])
     selected_week = next((week for week in weeks if is_within_interval(start_date, week.get("start_date"), week.get("end_date"))), None)
-
+    print("selected_week", selected_week)
     # Prepare input for the crew service
     input_data = {
         "unit_id": unit_id,
@@ -91,7 +91,7 @@ def run_faq_agent_analysis(self, clustering_result: dict = None, start_date=None
         "content": unit_data.get("content", ""),
         "start_date": str(start_date),
         "end_date": str(end_date),
-        "week": selected_week.get("week_number"),
+        "week": selected_week.get("week_id"),
         "weekly_content": selected_week.get("content"),
     }
 
@@ -157,7 +157,7 @@ def run_faq_agent_analysis(self, clustering_result: dict = None, start_date=None
     }
 
 @app.task(bind=True, name="run_unit_trend_analysis")
-def run_unit_trend_analysis(self, clustering_result: dict = None, start_date=None, end_date=None, cluster_id: str = None, unit_id: str = None) -> Dict[str, Any]:
+def run_unit_trend_analysis(self, clustering_result: dict = None, unit_id: str = None, category: str = None) -> Dict[str, Any]:
     """
     Celery task to run agent analysis on clustered questions.
     This task can be chained with the cluster_unit_documents task or run independently with a cluster_id.
@@ -177,8 +177,7 @@ def run_unit_trend_analysis(self, clustering_result: dict = None, start_date=Non
         task_id=transaction_id,
         status="running unit trend analysis",
     )
-    print(
-        f"Running agent analysis with clustering_result: {clustering_result}, cluster_id: {cluster_id}, unit_id: {unit_id}")
+
     # # Determine cluster_id and unit_id from either the clustering_result or provided params
     if clustering_result is not None:
         clustering_result = ClusterTaskResult(**clustering_result)
@@ -222,26 +221,7 @@ def run_unit_trend_analysis(self, clustering_result: dict = None, start_date=Non
             "message": f"Unit data not found for unit_id: {unit_id}",
             "unit_id": unit_id
         }
-    weekly_content = []
-    weeks = []
-    # extract weekly contetnt
-    if start_date and end_date:
-        for index, week in enumerate(unit_data.get("weeks", [])):
-            week_start_date = week.get("start_date")
-            week_end_date = week.get("end_date")
-            # store the index of the week
 
-            week_start_date = parse_date(week_start_date) if isinstance(
-                week_start_date, str) else week_start_date
-            week_end_date = parse_date(week_end_date) if isinstance(
-                week_end_date, str) else week_end_date
-            start_date = parse_date(
-                start_date) if isinstance(start_date, str) else start_date
-            end_date = parse_date(
-                end_date) if isinstance(end_date, str) else end_date
-            if start_date <= week_end_date and end_date >= week_start_date:
-                weekly_content.append(week.get("content", ""))
-                weeks.append(str(index+1))
 
     # Prepare input for the crew service
     input_data = {
@@ -249,10 +229,8 @@ def run_unit_trend_analysis(self, clustering_result: dict = None, start_date=Non
         "unit_name": unit_data.get("name", "") + " " + unit_data.get("description", ""),
         "questions": core_clustered_content,
         "content": unit_data.get("content", ""),
-        "start_date": str(start_date),
-        "end_date": str(end_date),
-        "weeks": weeks,
-        "weekly_content": weekly_content,
+        "category": category,
+        "assessment_description": "assignment",
     }
 
     # Update task state
@@ -260,7 +238,7 @@ def run_unit_trend_analysis(self, clustering_result: dict = None, start_date=Non
                       meta={"status": "Running agent analysis", "unit_id": unit_id})
 
     result = UnitTrendAnalysisCrewService(
-        index_name=VECTOR_INDEX_NAME).run(CrewAIFAQInputSchema(**input_data))
+        index_name=VECTOR_INDEX_NAME).run(CrewAIUnitTrendAnalysisInputSchema(**input_data))
     
     print("agent analysis result", result)
     # Update transaction with result

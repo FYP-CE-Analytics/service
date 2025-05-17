@@ -50,8 +50,8 @@ def get_embeddings_from_db(namespace, vector_store, ids: List[str]) -> pd.DataFr
 
 
 @app.task(bind=True, name="cluster_unit_documents")
-def cluster_unit_documents(self, prev_req: Dict, unit_id: str, start_date, end_date, auto_optimize: bool = True,
-                           min_cluster_size: int = 2, min_samples: int = 2) -> Dict:
+def cluster_unit_documents(self, prev_req: Dict, unit_id: str, auto_optimize: bool = True,
+                           min_cluster_size: int = 2, min_samples: int = 2, **kwargs) -> Dict:
     """
     Celery task to perform HDBSCAN clustering on documents for a specific unit.
     Gets the embeddings from vector database - from previous task
@@ -75,11 +75,65 @@ def cluster_unit_documents(self, prev_req: Dict, unit_id: str, start_date, end_d
     prev_transaction_id = prev_req.get("transaction_id")
     thread_ids = prev_req.get("result").get("thread_ids")
     task_transaction_repo = TaskTransactionRepository()
+    
     # Update the task transaction 
     task_transaction_repo.update_task_status_sync(
         task_id=prev_transaction_id,
         status="finish clustering"
     )
+
+    # If we have less than 5 threads, return them directly without clustering
+    if len(thread_ids) < 5:
+        namespace = str(unit_id)
+        vector_store = pc_service.Index(INDEX_NAME)
+        
+        # Get embeddings from vector database
+        embeddings_df = get_embeddings_from_db(namespace, vector_store, thread_ids)
+        
+        if embeddings_df.empty:
+            return {
+                "status": "error",
+                "message": f"No documents found for unit_id: {unit_id}",
+                "unit_id": unit_id
+            }
+            
+        # Create core docs directly from the embeddings
+        core_docs = {str(i): {
+            'id': doc.get('id'),
+            'probability': 1.0,  # Set probability to 1 since we're not clustering
+            'metadata': doc.get('metadata', {})
+        } for i, doc in enumerate(embeddings_df.to_dict(orient='records'))}
+        
+        cluster_record = ClusterRecord(** {
+            "unit_id": unit_id,
+            "created_at": datetime.now(),
+            "num_documents": len(embeddings_df),
+            "num_clusters": len(core_docs),
+            "parameters": {
+                "min_cluster_size": min_cluster_size,
+                "min_samples": min_samples,
+                "metric": "cosine"
+            },
+            "core_docs": list(core_docs.values()),
+        })
+        
+        # Save to database
+        cluster_id = db.clusters.insert_one(cluster_record.model_dump()).inserted_id
+        if not cluster_id:
+            return {
+                "status": "error",
+                "message": "Failed to save clustering results to database",
+                "unit_id": unit_id
+            }
+            
+        cluster_record.cluster_id = str(cluster_id)
+        
+        return ClusterTaskResult(
+            status="success",
+            message="Retrieved questions directly (no clustering needed)",
+            result=cluster_record,
+            transaction_id=prev_transaction_id
+        ).model_dump()
 
     # Update task state to show progress
     self.update_state(state="PROCESSING",

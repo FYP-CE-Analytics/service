@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-
+from typing import Optional
 
 class RunTaskRequest(BaseModel):
     """
@@ -12,3 +12,5 @@ class RunTaskRequest(BaseModel):
                            description="Start date for the task in YYYY-MM-DD format")
     endDate: str = Field(...,
                          description="End date for the task in YYYY-MM-DD format")
+    category: Optional[str] = Field(None,
+                          description="Category for the task")

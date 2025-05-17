@@ -101,3 +101,8 @@ class TaskTransactionRepository:
         except Exception as e:
             print(f"Error updating task status: {str(e)}")
             return None
+        
+    async def get_task_result_by_unit_id_and_name(self, unit_id: str, name: str) -> Optional[List[TaskTransactionModel]]:
+        """Get task result by unit id and name"""
+        print(f"Getting task result by unit id and name: {unit_id}, {name}")
+        return await self.engine.find(TaskTransactionModel, TaskTransactionModel.unit_id == unit_id, TaskTransactionModel.task_name == name)

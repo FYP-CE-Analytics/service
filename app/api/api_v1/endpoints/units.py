@@ -318,7 +318,12 @@ async def get_unit_weeks(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
+@router.get("/{unit_id}/categories")
+async def get_unit_categories(unit_id: str, db=Depends(deps.get_db))->List[str]:
+    unit = await crud.unit.get(db, {"id": int(unit_id)})
+    if not unit:
+        raise HTTPException(status_code=404, detail=f"Unit with ID {unit_id} not found")
+    return list(set([t.category for t in unit.threads]))
 
 async def check_user_unit_access(unit_id: str, auth_id: str, db=Depends(deps.get_db))->bool:
     user = await crud.user.get(db, {"auth_id": auth_id})
