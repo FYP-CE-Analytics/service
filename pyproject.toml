@@ -14,6 +14,7 @@ dependencies = [
     "openai>=1.68.2",
     "pandas>=2.2.3",
     "pinecone>=6.0.2",
+    "psutil>=7.0.0",
     "python-dotenv>=1.0.1",
     "python-jose>=3.4.0",
     "redis>=5.2.1",
