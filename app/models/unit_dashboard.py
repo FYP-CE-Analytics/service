@@ -23,6 +23,7 @@ class UnitWeeks(EmbeddedModel):
     content: str = Field(default="")
     thread_count: int = Field(default=0)
     week_type: str = Field(default="teaching")  # Can be "teaching", "break", "exam", etc.
+    category_counts: Dict[str, int] = Field(default_factory=dict)  # Store counts of threads by category for this week
 
 
 

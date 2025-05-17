@@ -177,10 +177,22 @@ async def sync_unit_threads(
         unit.threads.extend(new_threads)
         unit.last_sync_at = datetime.now().isoformat()
         unit.thread_count = len(unit.threads)
+        
+        # Update thread counts and category counts for each week
         for week in unit.weeks:
-            week.thread_count = len([t for t in unit.threads if is_within_interval(t.created_at, week.start_date, week.end_date)])
+            # Get threads for this week
+            week_threads = [t for t in unit.threads if is_within_interval(t.created_at, week.start_date, week.end_date)]
+            week.thread_count = len(week_threads)
             
-
+            # Calculate category counts for this week
+            week_category_counts = {}
+            for thread in week_threads:
+                category = thread.category if thread.category else 'uncategorized'
+                week_category_counts[category] = week_category_counts.get(category, 0) + 1
+            
+            # Update week's category counts
+            week.category_counts = week_category_counts
+            
         await crud.unit.engine.save(unit)
         
         return {
@@ -304,7 +316,8 @@ async def get_unit_weeks(
                 "content": week.content,
                 "threadCount": week.thread_count,
                 "faqReports": [task for task in tasks if (task.task_name.lower().startswith("generating faq report") and
-                    is_within_interval(task.input.get("startDate"), week.start_date, week.end_date))]
+                    is_within_interval(task.input.get("startDate"), week.start_date, week.end_date))],
+                "categoryCounts": week.category_counts
                 
                 }
             weeks_data.append(week_data)
