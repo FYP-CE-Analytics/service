@@ -11,6 +11,8 @@ from app.core.auth import AuthInfo, get_current_user
 from app.api.api_v1.endpoints.units import check_user_unit_access
 from app.api import deps
 from app import crud
+from app.core.config import settings
+
 router = APIRouter()
 
 
@@ -66,11 +68,58 @@ async def trigger_unit_trend_analysis_task(request: RunTaskRequest, db=Depends(d
 @router.get("/unit_trend_analysis_report/{unit_id}/{category}")
 async def get_unit_trend_analysis_report(unit_id: str, category: str, db=Depends(deps.get_db)):
     """
-    Get the unit trend analysis report.
+    Get the unit trend analysis report with processed question details.
+    Returns the report and a list of questions with their theme, summary, and thread details.
     """
     repo = TaskTransactionRepository()
-    task_status = await repo.get_task_result_by_unit_id_and_name(unit_id, category)
-    return task_status
+    task_status_list = await repo.get_task_result_by_unit_id_and_name(unit_id, category)
+    
+    if not task_status_list:
+        raise HTTPException(status_code=404, detail="No tasks found for this unit and category")
+    
+    # Find the most recent completed task
+    completed_tasks = [task for task in task_status_list if task.status == "completed"]
+    if not completed_tasks:
+        return completed_tasks[-1]
+    
+    # Get the most recent task
+    latest_task = completed_tasks[-1]
+    print("latest_task: ", latest_task)
+    
+    if latest_task.result:
+        # Get the unit and its threads
+        unit = await crud.unit.get(db, {"id": int(unit_id)})
+        if not unit:
+            raise HTTPException(status_code=404, detail="Unit not found")
+            
+        # Create a map of thread IDs to their content for quick lookup
+        thread_map = {str(thread.id): thread for thread in unit.threads}
+        
+        # Process the questions from the result
+        questions = []
+        for cluster in latest_task.result.get("questions", []):
+            thread_details = []
+            for thread_id in cluster.get("questionIds", []):
+                if thread_id in thread_map:
+                    thread = thread_map[thread_id]
+                    thread_details.append({
+                        "id": str(thread.id),
+                        "title": thread.title,
+                        "content": thread.content,
+                        "url": f"{settings.ED_BASE_URL}/courses/{unit_id}/discussion/{str(thread.id)}"
+                    })
+            
+            questions.append({
+                "theme": cluster.get("theme", ""),
+                "summary": cluster.get("summary", ""),
+                "threads": thread_details
+            })
+        
+        print("questions: ", questions)
+        latest_task.result.update({"questions": questions})
+        return latest_task
+    
+    return latest_task
 
 @router.get("/status/{transaction_id}")
 async def get_transaction_status(transaction_id: str):
