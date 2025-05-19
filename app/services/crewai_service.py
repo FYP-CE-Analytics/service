@@ -5,7 +5,7 @@ from crewai import Agent, Task, Crew, Process, LLM
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 from app.schemas.vector_store import VectorSearchResponse
-from app.schemas.crewai_faq_service_schema import CrewAIFAQInputSchema, CrewAIFAQOutputSchema, CrewAIThemeOutputSchema, CrewAIFAQRunOutputSchema, CrewAIUnitTrendAnalysisInputSchema, CrewAIUnitTrendAnalysisOutputSchema
+from app.schemas.crewai_faq_service_schema import CrewAIFAQInputSchema, CrewAIFAQOutputSchema, CrewAIThemeOutputSchema, CrewAIFAQRunOutputSchema, CrewAIUnitTrendAnalysisInputSchema, CrewAIUnitTrendAnalysisOutputSchema, CrewAIAnalysisRunOutputSchema
 from app.services.pinecone_vector_store import PineconeVectorStore
 from app.utils.shared import parse_date
 
@@ -62,7 +62,7 @@ class QuestionVectorSearchTool(BaseTool):
             results = self.vectorstore.search_with_string(
                 query_string=query_string, collection_name=self.collection_name, filter=self.filter)
             if not results:
-                return [{"resukt": "No related questions found."}]
+                return [{"result": "No related questions found."}]
             # if results:
             #     # parse the date
             #     start_date = self.start_date
@@ -87,6 +87,7 @@ class UnitFAQCrewService:
         self.theme_extractor_task = None
         self.faq_writer_task = None
         self.report_writer_task = None
+
     def _initialize_tools(self, collection_name: str, week_number: int, **kwargs) -> None:
         """Initializes tools that depend on the unit (collection_name)."""
         print(f"Initializing tools for collection: {collection_name}")
@@ -103,7 +104,8 @@ class UnitFAQCrewService:
 
     def setup_crew(self, unit_id: str, week_number: int) -> Crew:
         """Sets up the Crew for a specific unit."""
-        self._initialize_tools(collection_name=unit_id, week_number=week_number)
+        self._initialize_tools(collection_name=unit_id,
+                               week_number=week_number)
 
         # Define Agents
         themeExtractorAgent = Agent(
@@ -150,7 +152,7 @@ class UnitFAQCrewService:
                 "A list of identified themes. Each theme should include: \n"
                 "- A concise title for the theme (e.g., 'Confusion about Assignment 1 Submission Format').\n"
                 "- A brief summary of the core issue or question the theme represents.\n"
-                "- A list of the initial question IDs and the similar question IDs/content retrieved from the vector search that support this theme. E.g. theme: 'Confusion about Assignment 1 Submission Format' \n"
+                "- A list of similar question IDs retrieved from the vector search that support this theme. E.g. theme: 'Confusion about Assignment 1 Submission Format' \n"
                 "  - Question IDs: [123, 456]\n"
             ),
             agent=themeExtractorAgent,
@@ -186,7 +188,7 @@ class UnitFAQCrewService:
 
         crew = Crew(
             agents=[themeExtractorAgent, faqWriterAgent, reportWriterAgent],
-            tasks=[self.theme_extractor_task, self.faq_writer_task ],
+            tasks=[self.theme_extractor_task, self.faq_writer_task],
             verbose=True,
             # process=Process.sequential,
             # llm=self.llm,
@@ -211,11 +213,11 @@ class UnitFAQCrewService:
         print(result)
 
         print(self.theme_extractor_task.output.pydantic.model_dump())
-        
+
         # Extract questions from theme extractor and report from FAQ writer
         theme_data = self.theme_extractor_task.output.pydantic
         faq_data = result
-        
+
         return CrewAIFAQRunOutputSchema(
             report=faq_data.report,
             questions=theme_data.questions
@@ -251,21 +253,23 @@ class UnitTrendAnalysisCrewService:
         themeExtractorAgent = Agent(
             role="You are a high education university tutor for {unit_name} teaching about {content}. Your goal is to help identify common questions.",
             goal="Extract the common theme of the questions students asked on the forum. This will then be used to help resolve their issues, including creating an FAQ or making modifications to assessment specifications.", 
-            backstory="You are a university tutor skilled at identifying recurring themes in student questions. Your task is to pinpoint these themes and understand the underlying points of confusion that need addressing.",
+            backstory="You are a university tutor skilled at identifying recurring themes and common misconceptions and struggles in student questions. Your task is to pinpoint these themes and understand the underlying points of confusion that need addressing. \
+            Group the questions based on the similarity of the content and the theme of the question",
             verbose=True,
             allow_delegation=False,
             llm=self.llm,
             tools=[self.rag_tool]
         )
-        
+
         reportWriterAgent = Agent(
             role="You are the chief lecturer at a university for {unit_name} teaching about {content}. Your goal is to synthesize analysis findings for the teaching team.",
-            goal="Synthesize all findings into a summary report. Highlight common struggles, trends,potential common misconceptions and confusion among students, and areas needing attention for unit improvement.",
-            backstory="Dedicated to weekly unit improvement, you create insightful executive summaries for the teaching team, focusing on actionable insights derived from student question data.",
+            goal="Synthesize all findings into a summary report. Highlight common struggles, trends,potential common misconceptions and confusion among students, and areas needing attention for unit improvement. \
+            provide evidence for the analysis and the findings by refering to the questions and maybe provide the question content",
+            backstory="Dedicated to weekly unit improvement, you create insightful executive summaries for the teaching team, focusing on actionable insights derived from student question data",
             verbose=True,
             allow_delegation=False,
             llm=self.llm,
-            tools=[]
+            tools=[self.rag_tool]
         )
 
         self.theme_extractor_task = Task(
@@ -274,20 +278,23 @@ class UnitTrendAnalysisCrewService:
                 "For each question, use the vector search tool with the question's content as the query to find the top 3 semantically similar questions from the forum knowledge base. "
                 "Group related questions together based on similarity and content. "
                 "Identify the common underlying theme or point of confusion for each group. "
+                "Group the questions based on the similarity of the content and the theme of the question"
             ),
             expected_output=(
                 "A list of identified themes. Each theme should include: \n"
                 "- A concise title for the theme (e.g., 'Confusion about Assignment 1 Submission Format').\n"
                 "- A brief summary of the core issue or question the theme represents.\n"
-                "- A list of the initial question IDs and the similar question IDs/content retrieved from the vector search that support this theme. E.g. theme: 'Confusion about Assignment 1 Submission Format' \n"
+                "- A list of the similar question IDs retrieved from the vector search that support this theme. E.g. theme: 'Confusion about Assignment 1 Submission Format' \
+                  - Question IDs: [123, 456,789]"
             ),
-            agent=themeExtractorAgent
+            agent=themeExtractorAgent,
+            output_pydantic=CrewAIThemeOutputSchema,
         )
         self.report_writer_task = Task(
             description=(
                 "Compile a summary report for the teaching team based on the questions found on the assessment category {category}. Include the following sections:\n"
                 "1.  **Overview:** Highlight the general trends discovered(are student more confused about the content, or more confused about the assessment format, or more confused about the submission format, etc.)\n"
-                "2.  **Major Themes within the questions:** List the key themes identified by the Theme Extractor, perhaps noting their frequency or the number of related questions found.\n"
+                "2.  **Major Themes within the questions:** List the key themes identified by the Theme Extractor\n"
                 "3.  **Potential Misconception and stuggles:** Highlight any significant misconceptions or difficulties student face on the {category} indicated by the themes.\n"
                 "4.  **Recommendations:** Provide recommendations for the teaching team to address the potential blockers and improve the unit."
 
@@ -300,11 +307,11 @@ class UnitTrendAnalysisCrewService:
                 "# Overview\n"
                 "Analysis for {category} on {unit_name}\n"
                 "## Major Themes\n"
-                "- [theme1]\n"
-                "- [theme2]\n"
+                "- [theme1] - refer to the questions\n"
+                "- [theme2] - refer to the questions\n"
                 "# Student Common Misconceptions\n"
-                "- [misconception1]\n"
-                "- [misconception2]\n"
+                "- [misconception1] - refer to the questions\n"
+                "- [misconception2] - refer to the questions\n"
                 "# Recommendations\n"
                 "- [recommendation1]\n"
                 "- [recommendation2]\n"
@@ -317,26 +324,32 @@ class UnitTrendAnalysisCrewService:
         # Create and return the Crew
         crew = Crew(
             agents=[themeExtractorAgent, reportWriterAgent],
-            tasks=[self.theme_extractor_task, self.report_writer_task ],
+            tasks=[self.theme_extractor_task, self.report_writer_task],
             verbose=True,
             # process=Process.sequential,
             # llm=self.llm,
         )
         return crew
     
-    def run(self, inputs: CrewAIUnitTrendAnalysisInputSchema) -> CrewAIUnitTrendAnalysisOutputSchema:
+    def run(self, inputs: CrewAIUnitTrendAnalysisInputSchema) -> CrewAIAnalysisRunOutputSchema:
         """Runs the Crew with the given inputs."""
         unit_id = inputs.unit_id
         unit_name = inputs.unit_name
         if not unit_id or not unit_name:
             raise ValueError(
-                "unit_id and unit_name must be provided in inputs")     
-        
+                "unit_id and unit_name must be provided in inputs")
+
         crew = self.setup_crew(
             unit_id, category=inputs.category)
         # Prepare inputs specifically for kickoff, ensuring keys match task expectations
 
         print(f"Running crew with inputs: {inputs.model_dump()}")
         result = crew.kickoff(inputs=inputs.model_dump()).pydantic
-        
-        return result
+        question_clusters = self.theme_extractor_task.output.pydantic
+
+        print("question clusters: ", question_clusters)
+
+        return CrewAIAnalysisRunOutputSchema(
+            report=result.report,
+            questions=question_clusters.questions
+        )
