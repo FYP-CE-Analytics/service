@@ -5,10 +5,10 @@ from app import crud
 from app.services.ed_forum_service import get_ed_service
 from odmantic import ObjectId
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from app.repositories.question_cluster_repository import QuestionClusterRepository
 from app.utils.shared import is_within_interval, parse_date
-from app.models.unit_dashboard import ThreadMetadata
+from app.models.unit_dashboard import ThreadMetadata, UnitModel
 from app.repositories.task_transaction_repository import TaskTransactionRepository
 from app.core.auth import AuthInfo, get_current_user
 
@@ -63,6 +63,83 @@ async def get_unanswered_threads(course_id: int, db=Depends(deps.get_db), auth_i
     threads = await ed_service.get_unanswered_threads(course_id)
     return threads
 
+# @router.get("/{course_id}/all-threads")
+# async def get_all_threads(course_id: int, db=Depends(deps.get_db)):
+#     # if not await check_user_unit_access(course_id, auth_info.auth_id, db):
+#     #     raise HTTPException(status_code=403, detail="User does not have access to this unit")
+#     # user = await crud.user.get(db, {"auth_id": auth_info.auth_id})
+#     # if not user:
+#     #     raise HTTPException(status_code=404, detail="User not found")
+#     ed_service = await get_ed_service("z1vssi.9KlxOrzubW93NZi5VYrsFdwccfJ1Koqnu9fxt0Or")
+#     threads = await ed_service.get_all_students_threads(course_id)
+#     return threads
+
+async def create_thread_metadata(thread: Dict[str, Any], theme_lookup: Dict[str, List[str]]) -> ThreadMetadata:
+    """Create ThreadMetadata object from thread data"""
+    return ThreadMetadata(
+        id=str(thread["id"]),
+        title=thread["title"],
+        content=thread["document"],
+        created_at=thread["created_at"],
+        updated_at=thread["updated_at"],
+        is_answered=thread["is_answered"],
+        is_student_answered=thread["is_student_answered"],
+        is_staff_answered=thread["is_staff_answered"],
+        needs_attention=False,
+        themes=theme_lookup.get(str(thread["id"]), []),
+        last_sync_at=datetime.now().isoformat(),
+        vote_count=thread["vote_count"],
+        thread_type=thread["type"],
+        category=thread.get("subcategory") or thread.get("category", "uncategorized"),
+        user_role=thread.get("user_role", "anonymous")
+    )
+
+async def update_existing_thread(existing_thread: ThreadMetadata, thread: Dict[str, Any], theme_lookup: Dict[str, List[str]]) -> bool:
+    """Update existing thread if there are changes"""
+    has_changes = False
+    
+    # Update themes if available
+    if str(thread["id"]) in theme_lookup:
+        existing_thread.themes.extend(theme_lookup[str(thread["id"])])
+        existing_thread.themes = list(set(existing_thread.themes))
+        has_changes = True
+
+    # Check for other changes
+    if (existing_thread.updated_at != thread["updated_at"] or
+        existing_thread.content != thread["document"] or
+        existing_thread.title != thread["title"]):
+        
+        existing_thread.title = thread["title"]
+        existing_thread.content = thread["document"]
+        existing_thread.updated_at = thread["updated_at"]
+        existing_thread.is_answered = thread["is_answered"]
+        existing_thread.is_student_answered = thread["is_student_answered"]
+        existing_thread.is_staff_answered = thread["is_staff_answered"]
+        existing_thread.vote_count = thread["vote_count"]
+        existing_thread.thread_type = thread["type"]
+        existing_thread.category = thread.get("subcategory") or thread.get("category", "uncategorized")
+        existing_thread.last_sync_at = datetime.now().isoformat()
+        has_changes = True
+
+    return has_changes
+
+async def update_week_statistics(unit: UnitModel):
+    """Update thread counts and category counts for each week"""
+    for week in unit.weeks:
+        # Get threads for this week
+        week_threads = [
+            t for t in unit.threads 
+            if is_within_interval(t.created_at, week.start_date, week.end_date)
+        ]
+        week.thread_count = len(week_threads)
+        
+        # Calculate category counts
+        week_category_counts = {}
+        for thread in week_threads:
+            category = thread.category or 'uncategorized'
+            week_category_counts[category] = week_category_counts.get(category, 0) + 1
+        
+        week.category_counts = week_category_counts
 
 @router.post("/{unit_id}/sync-threads")
 async def sync_unit_threads(
@@ -74,140 +151,78 @@ async def sync_unit_threads(
     Sync all threads from Ed service to local database for a specific unit
     Filters out social categories and handles duplicates
     """
+    # Check access and get unit
     if not await check_user_unit_access(unit_id, auth_info.auth_id, db):
         raise HTTPException(status_code=403, detail="User does not have access to this unit")
-    try:
-        # Get unit
-        unit = await crud.unit.get(db, {"id": int(unit_id)})
-        if not unit:
-            raise HTTPException(status_code=404, detail=f"Unit with ID {unit_id} not found")
+    
+    unit = await crud.unit.get(db, {"id": int(unit_id)})
+    if not unit:
+        raise HTTPException(status_code=404, detail=f"Unit with ID {unit_id} not found")
 
-        # Get user's Ed service
-        user = await crud.user.get(db, {"auth_id": auth_info.auth_id})
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        ed_service = await get_ed_service(user.api_key)
-        
-        # Fetch all threads from Ed
-        threads = ed_service.client.list_all_students_threads(course_id=int(unit_id))
-        # Create a set of existing thread IDs for quick lookup
-        existing_thread_ids = {thread.id for thread in unit.threads}
-        
-        # Process threads and update unit
-        new_threads = []
-        updated_threads = []
-         # Get clusters for this unit
-        clusters = await cluster_repo.get_clusters_by_date_range(
-            None,
-            None,
-            unit_id
-        )
+    # Get Ed service
+    user = await crud.user.get(db, {"auth_id": auth_info.auth_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    ed_service = await get_ed_service(user.api_key)
+    
+    # Fetch threads and clusters
+    threads = await ed_service.get_all_students_threads(course_id=int(unit_id))
+    clusters = await cluster_repo.get_clusters_by_date_range(None, None, unit_id)
+    
+    # Create theme lookup
+    theme_lookup = {}
+    for cluster in clusters:
+        for qid in cluster.question_ids:
+            if qid not in theme_lookup:
+                theme_lookup[qid] = []
+            theme_lookup[qid].append(cluster.theme)
 
-        # Create theme lookup from clusters
-        theme_lookup = {}
-        for cluster in clusters:
-            for qid in cluster.question_ids:
-                if qid not in theme_lookup:
-                    theme_lookup[qid] = []
-                theme_lookup[qid].append(cluster.theme)
+    # Process threads
+    existing_thread_ids = {thread.id for thread in unit.threads}
+    new_threads = []
+    updated_threads = []
+    skipped_count = 0
 
-        
-        for thread in threads:
-            # Skip social categories
-            if thread.category.lower() == "social":
-                continue
-                
-            # Create thread metadata
-            thread_meta = ThreadMetadata(
-                id=str(thread.id),
-                title=thread.title,
-                content=thread.document,
-                created_at=thread.created_at.isoformat(),
-                updated_at=thread.updated_at.isoformat(),
-                is_answered=False, # need to update this to get the field from ed service 
-                needs_attention=False,  # Default to False, can be set based on business logic
-                themes=[],
-                last_sync_at=datetime.now().isoformat(),
-                # Additional metadata
-                vote_count=thread.vote_count,
-                thread_type=thread.type,
-                category=thread.subcategory if thread.subcategory else thread.category,
+    for thread in threads:
+        # Skip social categories
+        if thread.get("category", "").lower() == "social":
+            skipped_count += 1
+            continue
 
-            )
-            
-            # Merge cluster themes into new thread metadata
-            if thread.id in theme_lookup:
-                thread_meta.themes.extend(theme_lookup[thread.id])
-                thread_meta.themes = list(set(thread_meta.themes))
-            
-            # Check if thread already exists
-            if thread.id in existing_thread_ids:
-                # Update existing thread
-                for existing_thread in unit.threads:
-                    ## need to update the thread collection with the up to date themes
-                    if existing_thread.id == str(thread.id):
-                        # Update only if there are changes
-                        if thread.id in theme_lookup:
-                            existing_thread.themes.extend(theme_lookup[thread.id])
-                            existing_thread.themes = list(set(existing_thread.themes))  # Remove duplicates
+        if str(thread["id"]) in existing_thread_ids:
+            # Update existing thread
+            for existing_thread in unit.threads:
+                if existing_thread.id == str(thread["id"]):
+                    if await update_existing_thread(existing_thread, thread, theme_lookup):
+                        updated_threads.append(existing_thread)
+                    break
+        else:
+            # Add new thread
+            thread_meta = await create_thread_metadata(thread, theme_lookup)
+            new_threads.append(thread_meta)
 
-                        if (existing_thread.updated_at != thread.updated_at or
-                            existing_thread.content != thread.document or
-                            existing_thread.title != thread.title):
-                            # Update basic fields
-                            existing_thread.title = thread.title
-                            existing_thread.content = thread.document
-                            existing_thread.updated_at = thread.updated_at
-                            existing_thread.is_answered = thread.vote_count > 0
-                            
-                            existing_thread.vote_count = thread.vote_count
-                            existing_thread.thread_type = thread.type
-                            existing_thread.category = thread.subcategory if thread.subcategory else thread.category
-                            
-                            existing_thread.last_sync_at = datetime.now()
-                            updated_threads.append(existing_thread)
-                        
-                        break      
-            else:
-                # Add new thread
-                new_threads.append(thread_meta)
-        
-        # Update unit with new and updated threads
-        unit.threads.extend(new_threads)
-        unit.last_sync_at = datetime.now().isoformat()
-        unit.thread_count = len(unit.threads)
-        
-        # Update thread counts and category counts for each week
-        for week in unit.weeks:
-            # Get threads for this week
-            week_threads = [t for t in unit.threads if is_within_interval(t.created_at, week.start_date, week.end_date)]
-            week.thread_count = len(week_threads)
-            
-            # Calculate category counts for this week
-            week_category_counts = {}
-            for thread in week_threads:
-                category = thread.category if thread.category else 'uncategorized'
-                week_category_counts[category] = week_category_counts.get(category, 0) + 1
-            
-            # Update week's category counts
-            week.category_counts = week_category_counts
-            
-        await crud.unit.engine.save(unit)
-        
-        return {
-            "status": "success",
-            "message": f"Sync completed",
-            "stats": {
-                "total_threads": len(unit.threads),
-                "new_threads": len(new_threads),
-                "updated_threads": len(updated_threads),
-                "skipped_social": len([t for t in threads if t.category.lower() == "social"])
-            }
+    # Update unit
+    unit.threads.extend(new_threads)
+    unit.last_sync_at = datetime.now().isoformat()
+    unit.thread_count = len(unit.threads)
+    
+    # Update week statistics
+    await update_week_statistics(unit)
+    
+    # Save changes
+    await crud.unit.engine.save(unit)
+    
+    return {
+        "status": "success",
+        "message": "Sync completed",
+        "stats": {
+            "total_threads": len(unit.threads),
+            "new_threads": len(new_threads),
+            "updated_threads": len(updated_threads),
+            "skipped": skipped_count
         }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    }
 
 @router.get("/{unit_id}/threads")
 async def get_unit_threads(

@@ -2,11 +2,12 @@ from edapi import EdAPI, User as EdUser
 from edapi.models.course import CourseInfo
 from edapi.types.api_types.thread import API_Thread_WithComments
 from fastapi import HTTPException
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, TypedDict
 import httpx
 from datetime import datetime, timedelta
 from functools import lru_cache
 import json
+from edapi.types.api_types.endpoints.threads import API_ListThreads_Response
 
 
 class EdService:
@@ -15,7 +16,7 @@ class EdService:
         self.api_key = api_key
         self._client = None
         self._user = None
-        self.base_url = "https://edstem.org/api/"
+        self.base_url = "https://edstem.org/api"
         self._thread_cache = {}  # In-memory cache for threads
         self._cache_ttl = timedelta(minutes=5)  # Cache TTL
 
@@ -106,7 +107,7 @@ class EdService:
 
                 try:
                     response = await client.get(
-                        f"{self.client.base_url}/threads/{thread_id}",
+                        f"{self.base_url}/threads/{thread_id}",
                         headers={"Authorization": f"Bearer {self.api_key}"}
                     )
                     response.raise_for_status()
@@ -126,7 +127,7 @@ class EdService:
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(
-                    f"{self.client.base_url}/courses/{course_id}/threads",
+                    f"{self.base_url}/courses/{course_id}/threads",
                     headers={"Authorization": f"Bearer {self.api_key}"},
                     params={
                         "sort": "new",
@@ -152,12 +153,14 @@ class EdService:
                 detail=f"Error fetching unanswered threads: {str(e)}"
             )
 
+
+
     async def post_thread(self, course_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
         """Post a new thread"""
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    f"{self.client.base_url}/courses/{course_id}/threads",
+                    f"{self.base_url}/courses/{course_id}/threads",
                     headers={"Authorization": f"Bearer {self.api_key}"},
                     json=params
                 )
@@ -174,7 +177,7 @@ class EdService:
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    f"{self.client.base_url}/threads/{thread_id}/comments",
+                    f"{self.base_url}/threads/{thread_id}/comments",
                     headers={"Authorization": f"Bearer {self.api_key}"},
                     json=params
                 )
@@ -191,7 +194,7 @@ class EdService:
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    f"{self.client.base_url}/threads/{thread_id}/mark_duplicate",
+                    f"{self.base_url}/threads/{thread_id}/mark_duplicate",
                     headers={"Authorization": f"Bearer {self.api_key}"},
                     json={"duplicate_id": duplicate_id}
                 )
@@ -201,6 +204,69 @@ class EdService:
             raise HTTPException(
                 status_code=500,
                 detail=f"Error marking thread as duplicate: {str(e)}"
+            )
+        
+    async def get_all_students_threads(self, course_id: int) -> List[Dict[str, Any]]:
+        """Get all threads from a course with pagination, filtered to only include student threads"""
+        try:
+            threads: List[Dict[str, Any]] = []
+            offset = 0
+            limit = 100  # Number of threads per page
+            
+            while True:
+                print(f"fetching threads from {offset} to {offset + limit}")
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(
+                        f"{self.base_url}/courses/{course_id}/threads",
+                        headers={"Authorization": f"Bearer {self.api_key}"},
+                        params={
+                            "limit": limit,
+                            "offset": offset,
+                            "sort": "new"
+                        }
+                    )
+                    
+                    # Check if we've reached the end of pages
+                    if response.status_code != 200:
+                        print(f"Reached end of pages at offset {offset}")
+                        break
+                        
+                    print("fetching threads")
+                    response_data: API_ListThreads_Response = response.json()
+                    api_threads: List[Dict[str, Any]] = response_data["threads"]
+                    
+                    # If no threads returned, we've reached the end
+                    if not api_threads:
+                        print(f"No more threads found at offset {offset}")
+                        break
+                    
+                    # Filter for student threads only
+                    student_threads: List[Dict[str, Any]] = [
+                        {
+                            **thread,
+                            "user_role": "student" if thread.get("user") else "anonymous"
+                        }
+                        for thread in api_threads
+                        if thread.get("user") is None or  # Include anonymous threads
+                        (thread.get("user") and thread["user"].get("course_role") == "student")
+                    ]
+                    
+                    threads.extend(student_threads)
+                    
+                    # If we got fewer threads than the limit, we've reached the end
+                    if len(api_threads) < limit:
+                        print(f"Received fewer threads than limit at offset {offset}")
+                        break
+                        
+                    offset += limit
+                    
+            print(f"Total threads fetched: {len(threads)}")
+            return threads
+            
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error fetching student threads: {str(e)}"
             )
 
     async def get_course_info(self, unit_id: int) -> CourseInfo:

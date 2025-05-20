@@ -37,6 +37,8 @@ class ThreadMetadata(EmbeddedModel):
     created_at: str = Field(default="")  # Store as ISO format string
     updated_at: str = Field(default="")  # Store as ISO format string
     is_answered: bool = Field(default=False)
+    is_student_answered: bool = Field(default=False)
+    is_staff_answered: bool = Field(default=False)
     needs_attention: bool = Field(default=False)  # Simple flag for attention
     themes: List[str] = Field(default_factory=list)  # Multiple themes per thread
     last_sync_at: str = Field(default="")  # Store as ISO format string
@@ -45,6 +47,7 @@ class ThreadMetadata(EmbeddedModel):
     vote_count: int = Field(default=0)
     thread_type: str = Field(default="")
     category: str = Field(default="")
+    user_role: str = Field(default="")  # To store if the thread is from a student
 
 
 
