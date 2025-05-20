@@ -170,8 +170,9 @@ class UnitFAQCrewService:
                 "Structure the report for clarity and easy digestion by educators"
             ),
             expected_output=(
-                "A list of FAQ questions formatted clearly (e.g., using bullet points) used for FAQ draft "
+                "A list of FAQ questions formatted in strcutred md forma clearly (e.g., using bullet points) used for FAQ draft "
                 "Each question should directly address one of the identified themes. "
+                "Make sure the my heading like FAQ 1, FAQ 2, FAQ 3 are present in the report and clearly separated. Make sure the analysis is in new lines and not just one line."
                 "Example: \n"
                 "FAQ 1 (Theme 1): \n"
                 "*   How do I correctly format my code submission for Assignment 1?\n"
