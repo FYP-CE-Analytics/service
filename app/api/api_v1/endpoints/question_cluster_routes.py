@@ -53,6 +53,8 @@ async def get_unit_clusters(
                     "content": thread.content,
                     "title": thread.title,
                     "is_answered": thread.is_answered,
+                    "is_student_answered": thread.is_student_answered,
+                    "is_staff_answered": thread.is_staff_answered,
                     "needs_attention": thread.needs_attention,
                     "vote_count": thread.vote_count,
                     "url": f"{settings.ED_BASE_URL}/courses/{unit_id}/discussion/{thread_id}"

@@ -83,5 +83,9 @@ class ThreadRequest(BaseModel):
     course_id: int = Field(..., description="Course ID")
     limit: Optional[int] = Field(..., description="Limit")
     offset: Optional[int] = Field(..., description="Offset")
+    is_answered: Optional[bool] = Field(None, description="Filter by answered status")
+    is_student_answered: Optional[bool] = Field(None, description="Filter by student answered status")
+    is_staff_answered: Optional[bool] = Field(None, description="Filter by staff answered status")
+    user_role: Optional[str] = Field(None, description="Filter by user role (e.g., 'student')")
 
     
