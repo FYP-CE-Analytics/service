@@ -77,10 +77,14 @@ async def get_unit_trend_analysis_report(unit_id: str, category: str, db=Depends
     if not task_status_list:
         raise HTTPException(status_code=404, detail="No tasks found for this unit and category")
     
+    #find the ones that is still in running state
+    
+
     # Find the most recent completed task
+
     completed_tasks = [task for task in task_status_list if task.status == "completed"]
-    if not completed_tasks:
-        return completed_tasks[-1]
+    if not completed_tasks or len(completed_tasks) == 0:
+        return None
     
     # Get the most recent task
     latest_task = completed_tasks[-1]
