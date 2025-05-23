@@ -48,14 +48,7 @@ class CRUDUser(CRUDBase[UserModel, UserCreate, UserUpdate]):
             try:
                 # Fetch current active courses from Ed
                 current_courses = await ed_service.get_user_active_courses()
-                current_course_ids = {course.id for course in current_courses}
-
-                # Get all units associated with this user
-                existing_units = await unit.get_multi(
-                    db, 
-                    {"id": {"$in": list(current_course_ids)}}
-                )
-                existing_unit_ids = {unit.id for unit in existing_units}
+               
 
                 # Update available units in user model
                 user.available_units = [course.model_dump(exclude={'last_active'}) for course in current_courses]                    
@@ -128,20 +121,6 @@ class CRUDUser(CRUDBase[UserModel, UserCreate, UserUpdate]):
                             updated_selected_units.append(selected_unit)
                 except Exception as e:
                     print(f"Error processing unit {unit_id}: {str(e)}")
-                    continue
-
-            # Handle units to be removed
-            for unit_id in to_remove:
-                try:
-                    unit_obj = await unit.get(db, {"id": unit_id})
-                    if unit_obj:
-                        await unit.update(
-                            db,
-                            db_obj=unit_obj,
-                            obj_in={"status": UnitStatus.PAST}
-                        )
-                except Exception as e:
-                    print(f"Error updating unit status for {unit_id}: {str(e)}")
                     continue
 
             # Update user with new selected units
