@@ -78,11 +78,11 @@ def run_faq_agent_analysis(self, clustering_result: dict = None, start_date=None
 
     # Use the session to fetch unit data
     # To do
-    unit_data = db.unit.find_one({"_id": int(unit_id)}, {"weeks": 1})
+    unit_data = db.unit.find_one({"_id": int(unit_id)}, {"weeks": 1, "name": 1, "description": 1, "content": 1})
     # assign the weeks list from the document
     weeks = unit_data.get("weeks", [])
     selected_week = next((week for week in weeks if is_within_interval(start_date, week.get("start_date"), week.get("end_date"))), None)
-    print("selected_week", selected_week)
+    print("unit info", unit_data.get("name", ""), unit_data.get("description", ""))
     # Prepare input for the crew service
     input_data = {
         "unit_id": unit_id,
