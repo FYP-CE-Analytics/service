@@ -7,7 +7,7 @@ from typing import List
 class PineconeVectorStore(VectorStoreBase):
     """Pinecone vector store implementation."""
 
-    def __init__(self, index_name: str, namespace: str, api_key: str = None):
+    def __init__(self, index_name: str, namespace: str, api_key: str = None, **kwargs):
         self.pc_service = Pinecone(api_key=api_key)
         self.index_name = index_name
         self.namespace = namespace
