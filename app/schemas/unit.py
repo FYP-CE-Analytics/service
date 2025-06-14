@@ -65,6 +65,7 @@ class UnitResponse(BaseModel):
     session: str = Field(..., description="Academic session")
     weeks: List[WeekDetails] = Field(
         default_factory=list, description="Week configurations")
+    last_sync_at: str = Field(..., description="Last sync date")
 
     @classmethod
     def from_model(cls, unit: UnitModel):
