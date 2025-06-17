@@ -12,6 +12,7 @@ from app.api.api_v1.endpoints.units import check_user_unit_access
 from app.api import deps
 from app import crud
 from app.core.config import settings
+from app.schemas.tasks.task_status import TaskStatus
 
 router = APIRouter()
 
@@ -41,8 +42,15 @@ async def run_chain_task(request: RunTaskRequest, auth_info: AuthInfo = Depends(
     )
     # Execute the chain
     result = task_chain.apply_async()
+    
+    # Store the Celery task ID in the transaction record
+    repo.update_task_status_sync(
+        task_id=str(transcation_record.id),
+        status=TaskStatus.PENDING,
+        celery_task_id=result.id
+    )
 
-    return {"transactionId": str(transcation_record.id), "status": result.status, "progress": 0}
+    return {"transactionId": str(transcation_record.id), "status": result.status, "progress": 0, "celeryTaskId": result.id}
 
 
 @router.post("/run_unit_trend_analysis/")
@@ -62,7 +70,16 @@ async def trigger_unit_trend_analysis_task(request: RunTaskRequest, db=Depends(d
                        cluster_unit_documents.s(request.unitId),
                        run_unit_trend_analysis.s(request.unitId, request.category))
     result = task_chain.apply_async()
-    return {"transactionId": str(transcation_record.id), "status": result.status, "progress": 0}
+    print("result: ", result)
+    
+    # Store the Celery task ID in the transaction record
+    repo.update_task_status_sync(
+        task_id=str(transcation_record.id),
+        status=TaskStatus.PENDING,
+        celery_task_id=result.id
+    )
+    
+    return {"transactionId": str(transcation_record.id), "status": result.status, "progress": 0, "celeryTaskId": result.id}
 
 
 @router.get("/unit_trend_analysis_report/{unit_id}/{category}")
@@ -209,26 +226,35 @@ async def get_unit_tasks(unit_id: str):
         )
 
 
-@router.post("/cancel_chain/{chain_id}")
-async def cancel_task_chain(chain_id: str):
+@router.post("/cancel_chain/{transaction_id}")
+async def cancel_task_chain(transaction_id: str):
     """
     Cancel a chain of Celery tasks.
 
     Args:
-        chain_id: ID of the chain's parent task
+        transaction_id: ID of the transaction record containing the Celery task ID
 
     Returns:
         Status of the cancellation attempt
     """
     try:
+        # Get the transaction record to find the Celery task ID
+        repo = TaskTransactionRepository()
+        transaction = await repo.get_transaction_by_id(transaction_id)
+        if not transaction:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+            
+        celery_task_id = transaction.celery_task_id
+        if not celery_task_id:
+            raise HTTPException(status_code=404, detail="No Celery task ID found for this transaction")
+
         # Get the parent task
-        parent_task = AsyncResult(chain_id, app=celery_app)
+        parent_task = AsyncResult(celery_task_id, app=celery_app)
 
         # Revoke the parent task
-        celery_app.control.revoke(chain_id, terminate=True, signal='SIGTERM')
+        celery_app.control.revoke(celery_task_id, terminate=True, signal='SIGTERM')
 
         # Try to get and cancel child tasks if they exist
-        # Note: This depends on how your chain was created and if children are tracked
         if hasattr(parent_task, 'children'):
             child_tasks = parent_task.children
             if child_tasks:
@@ -237,8 +263,15 @@ async def cancel_task_chain(chain_id: str):
                         celery_app.control.revoke(
                             child.id, terminate=True, signal='SIGTERM')
 
+        # Update transaction status
+        repo.update_task_status_sync(
+            task_id=transaction_id,
+            status=TaskStatus.CANCELLED
+        )
+
         return {
-            "chain_id": chain_id,
+            "transaction_id": transaction_id,
+            "celery_task_id": celery_task_id,
             "status": "CANCELLATION_REQUESTED",
             "message": "Task chain cancellation has been requested"
         }

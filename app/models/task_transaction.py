@@ -9,6 +9,7 @@ class TaskTransactionModel(Model):
     Store the task transaction
     """
     task_id: Optional[str] = Field()
+    celery_task_id: Optional[str] = Field(default=None)
     status: TaskStatus = Field(default=TaskStatus.RECEIVED)
     created_at: datetime = Field(default_factory=datetime.now)
     completed_at: Optional[datetime] = Field(default=None)

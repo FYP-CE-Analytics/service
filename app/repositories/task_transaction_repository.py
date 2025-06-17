@@ -63,7 +63,8 @@ class TaskTransactionRepository:
 
     def update_task_status_sync(self, task_id: str, status: TaskStatus,
                                 error_message: str = "",
-                                result: Dict[str, Any] = None) -> Optional[Dict]:
+                                result: Dict[str, Any] = None,
+                                celery_task_id: str = None) -> Optional[Dict]:
         """Update task status and optional fields synchronously"""
         try:
             # Make sure we're using the right database access method
@@ -96,6 +97,8 @@ class TaskTransactionRepository:
                 update_data["error_message"] = error_message
             if result:
                 update_data["result"] = result
+            if celery_task_id:
+                update_data["celery_task_id"] = celery_task_id
 
             # Use update_one with $set operator instead of replace_one
             db[self.collection_name].update_one(
