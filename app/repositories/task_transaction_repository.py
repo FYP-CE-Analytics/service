@@ -3,6 +3,7 @@ from datetime import datetime
 from bson import ObjectId
 from app.db.session import MongoDatabase, get_engine
 from app.models.task_transaction import TaskTransactionModel
+from app.schemas.tasks.task_status import TaskStatus, TASK_STATUS_PROGRESS
 
 
 class TaskTransactionRepository:
@@ -18,13 +19,15 @@ class TaskTransactionRepository:
         """Create a new task transaction"""
         task = TaskTransactionModel(
             task_id="",
-            status="recieved",
+            status=TaskStatus.RECEIVED,
             created_at=datetime.now(),
             unit_id=unit_id,
             user_id=user_id,
             task_name=task_name,
             input=input,
+            progress=0
         )
+        print(f"Creating task: {task}")
         return await self.engine.save(task)
 
     async def get_transaction_by_id(self, trans_id: str) -> Optional[TaskTransactionModel]:
@@ -44,20 +47,21 @@ class TaskTransactionRepository:
         """Create a new task transaction synchronously"""
         task = {
             "task_id": task_id,
-            "status": "pending",
+            "status": TaskStatus.PENDING,
             "created_at": datetime.now(),
             "unit_id": unit_id,
             "user_id": user_id,
             "task_name": task_name,
             "error_message": "",
-            "result": {}
+            "result": {},
+            "progress": 0
         }
 
         result = self.db[self.collection_name].insert_one(task)
         task["_id"] = result.inserted_id
         return task
 
-    def update_task_status_sync(self, task_id: str, status: str,
+    def update_task_status_sync(self, task_id: str, status: TaskStatus,
                                 error_message: str = "",
                                 result: Dict[str, Any] = None) -> Optional[Dict]:
         """Update task status and optional fields synchronously"""
@@ -78,9 +82,15 @@ class TaskTransactionRepository:
                 print(f"Transaction with id {task_id} not found")
                 return None
 
+            # Get progress from status
+            progress = TASK_STATUS_PROGRESS.get(status, 0)
+
             # Prepare update data
-            update_data = {"status": status}
-            if status in ["completed", "success"]:
+            update_data = {
+                "status": status,
+                "progress": progress
+            }
+            if status in [TaskStatus.COMPLETED, TaskStatus.SUCCESS]:
                 update_data["completed_at"] = datetime.now()
             if error_message:
                 update_data["error_message"] = error_message

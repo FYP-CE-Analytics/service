@@ -134,7 +134,7 @@ async def get_transaction_status(transaction_id: str):
         transaction_id: ID of the transaction to check
 
     Returns:
-        Status of the transaction
+        Status of the transaction with progress percentage
     """
     try:
         # Fetch the task status from the database
@@ -143,25 +143,12 @@ async def get_transaction_status(transaction_id: str):
         if not task_status:
             raise HTTPException(
                 status_code=404, detail="Transaction not found")
-        if task_status.status == "PENDING":
-            progress = 0
-        elif task_status.status == "SUCCESS":
-            progress = 100
-        elif task_status.status == "FAILURE":
-            progress = 0
-        elif task_status.status == "running fetch_and_store_threads_by_unit":
-            progress = 10
-        elif task_status.status == "finish clustering":
-            progress = 60
-        elif task_status.status == "running agent analysis":
-            progress = 80
-        else:
-            progress = 0
 
         return {
             "transaction_id": transaction_id,
             "status": task_status.status,
-            "progress": progress}
+            "progress": task_status.progress
+        }
 
     except Exception as e:
         raise HTTPException(

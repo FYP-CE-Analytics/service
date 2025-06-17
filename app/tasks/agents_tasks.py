@@ -5,6 +5,7 @@ from app.const import VECTOR_INDEX_NAME
 from app.schemas.crewai_faq_service_schema import CrewAIFAQInputSchema, CrewAIUnitTrendAnalysisInputSchema
 from app.schemas.tasks.cluster_schema import ClusterTaskResult, CoreDocument
 from app.repositories.task_transaction_repository import TaskTransactionRepository
+from app.schemas.tasks.task_status import TaskStatus
 from pymongo import MongoClient
 import os
 from app.utils.shared import parse_date
@@ -39,7 +40,7 @@ def run_faq_agent_analysis(self, clustering_result: dict = None, start_date=None
     transaction_id = clustering_result.get("transaction_id")
     task_repo.update_task_status_sync(
         task_id=transaction_id,
-        status="running agent analysis",
+        status=TaskStatus.RUNNING_AGENT_ANALYSIS,
     )
     print(
         f"Running agent analysis with clustering_result: {clustering_result}, cluster_id: {cluster_id}, unit_id: {unit_id}")
@@ -106,7 +107,7 @@ def run_faq_agent_analysis(self, clustering_result: dict = None, start_date=None
     # Update transaction with result
     task_repo.update_task_status_sync(
         task_id=transaction_id,
-        status="completed",
+        status=TaskStatus.COMPLETED,
         result=result.model_dump()
     )
 
@@ -175,7 +176,7 @@ def run_unit_trend_analysis(self, clustering_result: dict = None, unit_id: str =
     transaction_id = clustering_result.get("transaction_id")
     task_repo.update_task_status_sync(
         task_id=transaction_id,
-        status="running unit trend analysis",
+        status=TaskStatus.RUNNING_UNIT_TREND_ANALYSIS,
     )
 
     # # Determine cluster_id and unit_id from either the clustering_result or provided params
@@ -244,7 +245,7 @@ def run_unit_trend_analysis(self, clustering_result: dict = None, unit_id: str =
     # Update transaction with result
     task_repo.update_task_status_sync(
         task_id=transaction_id,
-        status="completed",
+        status=TaskStatus.COMPLETED,
         result=result.model_dump()
     )
 

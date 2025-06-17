@@ -6,9 +6,10 @@ import pandas as pd
 from typing import Dict, List, Any
 from datetime import datetime
 from app.core import config
-from app.schemas.tasks.cluster_schema import ClusterRecord, ClusterTaskResult
+from app.schemas.tasks.cluster_schema import ClusterRecord, ClusterTaskResult, ClusteringParameters, CoreDocument
 from app.db.session import get_sync_client
 from app.repositories.task_transaction_repository import TaskTransactionRepository
+from app.schemas.tasks.task_status import TaskStatus
 import gc
 import psutil
 import os
@@ -89,7 +90,7 @@ def cluster_unit_documents(self, prev_req: Dict, unit_id: str, auto_optimize: bo
         # Update the task transaction 
         task_transaction_repo.update_task_status_sync(
             task_id=prev_transaction_id,
-            status="starting clustering"
+            status=TaskStatus.RUNNING_CLUSTERING
         )
 
         # If we have less than 5 threads, return them directly without clustering
@@ -114,18 +115,30 @@ def cluster_unit_documents(self, prev_req: Dict, unit_id: str, auto_optimize: bo
                 'metadata': doc.get('metadata', {})
             } for i, doc in enumerate(embeddings_df.to_dict(orient='records'))}
             
-            cluster_record = ClusterRecord(** {
-                "unit_id": unit_id,
-                "created_at": datetime.now(),
-                "num_documents": len(embeddings_df),
-                "num_clusters": len(core_docs),
-                "parameters": {
-                    "min_cluster_size": min_cluster_size,
-                    "min_samples": min_samples,
-                    "metric": "cosine"
-                },
-                "core_docs": list(core_docs.values()),
-            })
+            # Create proper CoreDocument objects
+            core_docs_list = [
+                CoreDocument(
+                    id=doc['id'],
+                    probability=doc['probability'],
+                    metadata=doc['metadata']
+                ) for doc in core_docs.values()
+            ]
+            
+            # Create proper ClusteringParameters object
+            clustering_params = ClusteringParameters(
+                min_cluster_size=1,
+                min_samples=len(core_docs),
+                metric="cosine"
+            )
+            
+            cluster_record = ClusterRecord(
+                unit_id=unit_id,
+                created_at=datetime.now(),
+                num_documents=len(embeddings_df),
+                num_clusters=len(core_docs),
+                parameters=clustering_params,
+                core_docs=core_docs_list
+            )
             
             # Save to database
             cluster_id = db.clusters.insert_one(cluster_record.model_dump()).inserted_id
@@ -141,7 +154,7 @@ def cluster_unit_documents(self, prev_req: Dict, unit_id: str, auto_optimize: bo
             # Update task status to completed
             task_transaction_repo.update_task_status_sync(
                 task_id=prev_transaction_id,
-                status="completed"
+                status=TaskStatus.COMPLETED
             )
             
             return ClusterTaskResult(
@@ -246,7 +259,7 @@ def cluster_unit_documents(self, prev_req: Dict, unit_id: str, auto_optimize: bo
         # Update task status to completed
         task_transaction_repo.update_task_status_sync(
             task_id=prev_transaction_id,
-            status="completed"
+            status=TaskStatus.COMPLETED
         )
 
         return ClusterTaskResult(
@@ -262,7 +275,7 @@ def cluster_unit_documents(self, prev_req: Dict, unit_id: str, auto_optimize: bo
         if 'prev_transaction_id' in locals():
             task_transaction_repo.update_task_status_sync(
                 task_id=prev_transaction_id,
-                status="failed"
+                status=TaskStatus.FAILURE
             )
         return {
             "status": "error",

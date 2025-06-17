@@ -14,6 +14,8 @@ from bson import ObjectId
 from app.repositories.task_transaction_repository import TaskTransactionRepository
 from app.utils.shared import parse_date, is_within_interval
 from app.db.session import get_sync_client
+from app.schemas.tasks.task_status import TaskStatus
+
 # Load environment variables
 load_dotenv()
 
@@ -97,7 +99,7 @@ def fetch_and_store_threads_by_unit(user_id: str, unit_id: str, transaction_id: 
     task_transaction_repo = TaskTransactionRepository()
     task_transaction_repo.update_task_status_sync(
         task_id=transaction_id,
-        status="running fetch_and_store_threads_by_unit",
+        status=TaskStatus.RUNNING_FETCH_THREADS,
     )
     # If not found, try with ObjectId
     if not user:
@@ -151,7 +153,7 @@ def fetch_and_store_threads_by_unit(user_id: str, unit_id: str, transaction_id: 
     if len(documents) == 0:
         task_transaction_repo.update_task_status_sync(
             task_id=transaction_id,
-            status="completed",
+            status=TaskStatus.ERROR,
             error_message="No threads found to store",
             result={}
         )
@@ -170,7 +172,7 @@ def fetch_and_store_threads_by_unit(user_id: str, unit_id: str, transaction_id: 
 
     task_transaction_repo.update_task_status_sync(
         task_id=transaction_id,
-        status="inserting success",
+        status=TaskStatus.INSERTING_SUCCESS,
         result=task_result.model_dump()
     )
     print(f"Task result: {task_result.model_dump_json(indent=2)}")
@@ -189,7 +191,7 @@ def fetch_and_store_threads_by_unit_by_category(user_id: str, unit_id: str, tran
     task_transaction_repo = TaskTransactionRepository()
     task_transaction_repo.update_task_status_sync(
         task_id=transaction_id,
-        status="running fetch_and_store_threads_by_unit_by_category",
+        status=TaskStatus.RUNNING_FETCH_THREADS_CATEGORY,
     )
     # If not found, try with ObjectId
     if not user:
@@ -236,7 +238,7 @@ def fetch_and_store_threads_by_unit_by_category(user_id: str, unit_id: str, tran
     if len(documents) == 0:
         task_transaction_repo.update_task_status_sync(
             task_id=transaction_id,
-            status="completed",
+            status=TaskStatus.ERROR,
             error_message="No threads found to store",
             result={}
         )
@@ -255,7 +257,7 @@ def fetch_and_store_threads_by_unit_by_category(user_id: str, unit_id: str, tran
 
     task_transaction_repo.update_task_status_sync(
         task_id=transaction_id,
-        status="inserting success",
+        status=TaskStatus.INSERTING_SUCCESS,
         result=task_result.model_dump()
     )
     print(f"Task result: {task_result.model_dump_json(indent=2)}")
