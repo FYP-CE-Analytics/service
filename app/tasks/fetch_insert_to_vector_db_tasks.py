@@ -142,9 +142,9 @@ def fetch_and_store_threads_by_unit(user_id: str, unit_id: str, transaction_id: 
             "category": thread.subcategory if thread.subcategory else thread.category,
             "content": thread_content,
             "created_at": str(thread.created_at),
-            "week_id": week['week_id'] if week else None,
-            "week_number": week['teaching_week_number'] if week else None,
-            "week_type": week['week_type'] if week else None
+            "week_id": week['week_id'] if week else "",
+            "week_number": week['teaching_week_number'] if week else "",
+            "week_type": week['week_type'] if week else ""
         })
 
     # Insert into vector DB
@@ -228,9 +228,9 @@ def fetch_and_store_threads_by_unit_by_category(user_id: str, unit_id: str, tran
             "category": thread.subcategory if thread.subcategory else thread.category,
             "content": thread_content,
             "created_at": str(thread.created_at),
-            "week_id": week['week_id'] if week else None,
-            "week_number": week['teaching_week_number'] if week else None,
-            "week_type": week['week_type'] if week else None
+            "week_id": week['week_id'] if week else "",
+            "week_number": week['teaching_week_number'] if week else "",
+            "week_type": week['week_type'] if week else ""
         })
 
     namespace = str(unit_id)
