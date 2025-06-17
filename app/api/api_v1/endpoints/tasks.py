@@ -101,7 +101,7 @@ async def get_transaction_status(transaction_id: str):
                 status_code=404, detail="Transaction not found")
 
         return {
-            "transaction_id": transaction_id,
+            "transactionId": transaction_id,
             "status": task_status.status,
             "progress": task_status.progress,
             "name": task_status.task_name
