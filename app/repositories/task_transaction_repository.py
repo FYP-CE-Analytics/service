@@ -119,3 +119,16 @@ class TaskTransactionRepository:
         """Get task result by unit id and name"""
         print(f"Getting task result by unit id and name: {unit_id}, {name}")
         return await self.engine.find(TaskTransactionModel, TaskTransactionModel.unit_id == unit_id, TaskTransactionModel.task_name == name)
+
+    async def get_analysis_reports_by_unit_id(self, unit_id: str) -> List[TaskTransactionModel]:
+        """
+        Get all analysis report tasks for a unit, excluding FAQ report tasks.
+        The category is stored in the task_name field.
+        """
+        # Get all tasks for the unit
+        tasks = await self.engine.find(TaskTransactionModel, TaskTransactionModel.unit_id == unit_id)
+        
+        # Filter out FAQ report tasks
+        analysis_tasks = [task for task in tasks if task.task_name != "generating faq report"]
+        
+        return analysis_tasks
