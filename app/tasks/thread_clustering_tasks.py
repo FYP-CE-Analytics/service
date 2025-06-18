@@ -73,6 +73,7 @@ def cluster_unit_documents(self, prev_req: Dict, unit_id: str, auto_optimize: bo
         min_cluster_size: Minimum size of clusters for HDBSCAN
         min_samples: Minimum samples parameter for HDBSCAN
     """
+    print("input parameters: ", prev_req, unit_id, auto_optimize, min_cluster_size, min_samples)
     try:
         # Check if previous task was successful
         if prev_req.get("status") != "success":
@@ -188,7 +189,7 @@ def cluster_unit_documents(self, prev_req: Dict, unit_id: str, auto_optimize: bo
                                 "unit_id": unit_id})
 
         # Determine parameters - either auto-optimize or use provided values
-        if auto_optimize and len(embeddings_df) > 10:
+        if auto_optimize and len(embeddings_df) >=5:
             try:
                 min_cluster_size, min_samples, metric = optimize_hdbscan_parameters(
                     embeddings_df)
@@ -229,19 +230,28 @@ def cluster_unit_documents(self, prev_req: Dict, unit_id: str, auto_optimize: bo
             }
 
         print(f"Core documents: {core_docs}")
-
-        cluster_record = ClusterRecord(** {
-            "unit_id": unit_id,
-            "created_at": datetime.now(),
-            "num_documents": len(embeddings_df),
-            "num_clusters": cluster_stats["num_clusters"],
-            "parameters": {
-                "min_cluster_size": min_cluster_size,
-                "min_samples": min_samples,
-                "metric": metric
-            },
-            "core_docs": list(core_docs.values()),
-        }
+        print(f"min cluster size: {min_cluster_size}")
+        print(f"min samples: {min_samples}")
+        print(f"metric: {metric}")
+        clustering_params = ClusteringParameters(
+            min_cluster_size=min_cluster_size,
+            min_samples=min_samples,
+            metric=metric
+        )
+        core_docs_list = [
+            CoreDocument(
+                id=doc['id'],
+                probability=doc['probability'],
+                metadata=doc['metadata']
+            ) for doc in core_docs.values()
+        ]
+        cluster_record = ClusterRecord(
+            unit_id=unit_id,
+            created_at=datetime.now(),
+            num_documents=len(embeddings_df),
+            num_clusters=cluster_stats["num_clusters"],
+            parameters=clustering_params,
+            core_docs=core_docs_list,
         )
 
         # handle if fail
@@ -332,7 +342,6 @@ def optimize_hdbscan_parameters(df: pd.DataFrame) -> tuple:
                             min_samples=min_samples,
                             metric=metric,
                             cluster_selection_method='eom',
-                            memory=Memory(location=None)  # Disable caching
                         )
                         clusterer.fit(embeddings_array)
                         labels = clusterer.labels_
@@ -419,7 +428,6 @@ def perform_hdbscan_clustering(df: pd.DataFrame, min_cluster_size: int = 5, min_
             min_samples=min_samples,
             metric=metric,
             cluster_selection_method='eom',
-            memory=Memory(location=None)  # Disable caching
         )
 
         clusterer.fit(embeddings_array)
